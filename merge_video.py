@@ -15,18 +15,15 @@ def merge_video(input_dir, output_dir, framerate=30):
     os.makedirs(os.path.dirname(video_filepath), exist_ok=True)
     snapshots_dir = os.path.join(input_dir, year, month, day)
     
-    # rename
-    i = 0
-    for snapshot in os.listdir(snapshots_dir):
-        if not snapshot.endswith('.jpg'):
-            continue
-        snapshot_path = os.path.join(snapshots_dir, snapshot)
-        new_snapshot_path = os.path.join(snapshots_dir, f"{i:05d}.jpg")
-        os.rename(snapshot_path, new_snapshot_path)
-    
-    cmd = f"ffmpeg -framerate {framerate} -i '{snapshots_dir}/%05d.jpg' -c:v libx264 -pix_fmt yuv420p '{video_filepath}'"
+    jpg_files = sorted([f for f in os.listdir(snapshots_dir) if f.endswith('.jpg')])
+
+    with open(os.path.join(snapshots_dir, "input.txt"), "w") as f:
+        for file in jpg_files:
+            f.write(f"file '{os.path.join(snapshots_dir, file)}'\n")
+
+    cmd = f"ffmpeg -f concat -safe 0 -i '{os.path.join(snapshots_dir, 'input.txt')}' -framerate {framerate} -c:v libx264 -pix_fmt yuv420p '{video_filepath}' -y"
     logging.info(f"Running command: {cmd}")
-    subprocess.run(cmd, shell=True)
+    subprocess.run(cmd, shell=True, capture_output=True)
     logging.info(f"Finished")
     
     # make latest link
