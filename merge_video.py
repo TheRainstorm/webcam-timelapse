@@ -10,7 +10,7 @@ def merge_video(input_dir, output_dir, framerate=30):
     month = str(now.month)
     day = str(now.day)
     logging.info(f"Creating video for {now.strftime('%Y-%m-%d')}")
-    video_filename = f"{now.strftime('%Y-%m-%d')}.mkv"
+    video_filename = f"{now.strftime('%Y-%m-%d')}.mp4"
     video_filepath = os.path.join(output_dir, year, month, day, video_filename)
     os.makedirs(os.path.dirname(video_filepath), exist_ok=True)
     snapshots_dir = os.path.join(input_dir, year, month, day)
@@ -27,7 +27,7 @@ def merge_video(input_dir, output_dir, framerate=30):
     logging.info(f"Finished")
     
     # make latest link
-    latest_video_filepath = os.path.join(output_dir, 'latest.mkv')
+    latest_video_filepath = os.path.join(output_dir, 'latest.mp4')
     if os.path.exists(latest_video_filepath):
         os.remove(latest_video_filepath)
     os.symlink(video_filepath, latest_video_filepath)
