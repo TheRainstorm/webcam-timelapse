@@ -1,0 +1,12 @@
+[Unit]
+Description=Run
+
+[Service]
+User=root
+WorkingDirectory=/root/repo/webcam-timelapse
+Type=oneshot
+ExecStart=/usr/bin/python3 take_snapshot.py -u "http://localhost/snapshot" -o /mnt/Disk1/timelapse/snapshots/
+#RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

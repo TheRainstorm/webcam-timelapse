@@ -1,0 +1,12 @@
+[Unit]
+Description=Run
+
+[Service]
+User=root
+WorkingDirectory=/root/repo/webcam-timelapse
+Type=oneshot
+ExecStart=/usr/bin/python3 merge_video.py -i /mnt/Disk1/timelapse/snapshots/ -o /mnt/Disk1/timelapse/videos/
+#RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=webcam-timelapse snapshot
+
+[Timer]
+# every 30 second
+#OnCalendar=*-*-* *:*:00
+OnBootSec=30
+OnUnitActiveSec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
