@@ -57,6 +57,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output-dir', help='Directory to save the snapshot')
     parser.add_argument('--font-size', type=int, default=24, help='Font size of the datetime text')
     parser.add_argument('-p', '--place', choices=['left-top', 'right-top', 'left-bottom', 'right-bottom'],
+                        default='left-top',
                         help='Position to place the datetime text')
     args = parser.parse_args()
     download_snapshot(args.snapshot_url, args.output_dir, font_size=args.font_size, place=args.place)
