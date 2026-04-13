@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>摄像头详情</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>📷 Webcam Timelapse</h1>
+  <span class="subtitle" id="camTitle">摄像头详情</span>
+</header>
+<main>
+  <a href="/" class="back-link">← 返回总览</a>
+
+  <div class="detail-grid">
+    <!-- 左列：实时流 + 统计 -->
+    <div>
+      <div class="panel" style="margin-bottom:20px">
+        <h3>实时预览</h3>
+        <div class="stream-box" id="streamBox">
+          <div class="stream-placeholder">无实时流配置</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
+          <button class="btn" id="btnCompose" onclick="triggerCompose()">合成昨日视频</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>统计</h3>
+        <div class="stats" id="stats">
+          <div class="stat"><div class="val" id="statSnaps">-</div><div class="lbl">总快照</div></div>
+          <div class="stat"><div class="val" id="statVideos">-</div><div class="lbl">视频数</div></div>
+          <div class="stat"><div class="val" id="statDays">-</div><div class="lbl">记录天数</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右列：快照浏览 + 视频列表 -->
+    <div>
+      <div class="panel" style="margin-bottom:20px">
+        <h3>历史快照</h3>
+        <div class="date-tabs" id="dateTabs"></div>
+        <div class="snap-grid" id="snapGrid"><div class="empty">选择日期查看快照</div></div>
+      </div>
+
+      <div class="panel">
+        <h3>延时视频</h3>
+        <div class="video-list" id="videoList"><div class="empty">暂无视频</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <span class="modal-close" onclick="closeModal()">✕</span>
+    <div id="modalContent" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const camName = params.get('name') || '';
+document.getElementById('camTitle').textContent = camName;
+document.title = camName + ' — Webcam Timelapse';
+
+let snapData = {};
+
+async function loadSnapshots() {
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/snapshots`);
+  const data = await res.json();
+  snapData = data.dates || {};
+
+  const tabs = document.getElementById('dateTabs');
+  const dates = Object.keys(snapData).sort().reverse();
+  if (!dates.length) { tabs.innerHTML = ''; document.getElementById('snapGrid').innerHTML = '<div class="empty">暂无快照</div>'; return; }
+
+  tabs.innerHTML = dates.map((d, i) =>
+    `<div class="date-tab${i===0?' active':''}" onclick="selectDate('${d}', this)">${d}</div>`
+  ).join('');
+
+  // 统计
+  let total = 0;
+  dates.forEach(d => total += snapData[d].length);
+  document.getElementById('statSnaps').textContent = total;
+  document.getElementById('statDays').textContent = dates.length;
+
+  selectDate(dates[0], tabs.firstChild);
+}
+
+function selectDate(d, el) {
+  document.querySelectorAll('.date-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const frames = snapData[d] || [];
+  const grid = document.getElementById('snapGrid');
+  if (!frames.length) { grid.innerHTML = '<div class="empty">无快照</div>'; return; }
+  grid.innerHTML = frames.map(f => `
+    <div class="snap-thumb" onclick="viewSnap('${d}','${f}')">
+      <img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${d}/${f}" loading="lazy">
+    </div>`).join('');
+}
+
+async function loadVideos() {
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos`);
+  const data = await res.json();
+  const list = document.getElementById('videoList');
+  const videos = data.videos || [];
+  document.getElementById('statVideos').textContent = videos.length;
+  if (!videos.length) { list.innerHTML = '<div class="empty">暂无视频</div>'; return; }
+  list.innerHTML = videos.reverse().map(v => `
+    <div class="video-item" id="vi-${v.date}">
+      <span class="video-date">${v.date}</span>
+      <span class="video-size">${(v.size/1024/1024).toFixed(1)} MB</span>
+      <button class="btn" onclick="playVideo('${v.filename}')">▶ 播放</button>
+      <a class="btn" href="/api/cameras/${encodeURIComponent(camName)}/videos/${v.filename}" download>↓</a>
+      <button class="btn btn-danger" onclick="deleteVideo('${v.date}', this)">删除</button>
+    </div>`).join('');
+}
+
+async function loadStream() {
+  const res = await fetch('/api/cameras');
+  const cameras = await res.json();
+  const cam = cameras.find(c => c.name === camName);
+  if (cam && cam.stream_url) {
+    document.getElementById('streamBox').innerHTML =
+      `<video src="${cam.stream_url}" autoplay muted controls></video>`;
+  }
+}
+
+function viewSnap(date, file) {
+  document.getElementById('modalContent').innerHTML =
+    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${date}/${file}" style="max-width:80vw;max-height:75vh">`;
+  document.getElementById('modal').classList.add('open');
+}
+
+function playVideo(filename) {
+  document.getElementById('modalContent').innerHTML =
+    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${filename}" controls autoplay style="max-width:80vw;max-height:70vh"></video>`;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  document.getElementById('modalContent').innerHTML = '';
+}
+
+async function triggerCapture() {
+  const btn = document.getElementById('btnCapture');
+  btn.disabled = true; btn.textContent = '抓取中...';
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/trigger`, { method: 'POST' });
+  btn.textContent = res.ok ? '✓ 成功' : '失败';
+  setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; loadSnapshots(); }, 1500);
+}
+
+async function triggerCompose() {
+  const btn = document.getElementById('btnCompose');
+  btn.disabled = true; btn.textContent = '合成中...';
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose`, { method: 'POST' });
+  btn.textContent = res.ok ? '✓ 完成' : '失败';
+  setTimeout(() => { btn.textContent = '合成昨日视频'; btn.disabled = false; loadVideos(); }, 2000);
+}
+
+async function deleteVideo(date, btn) {
+  if (!confirm(`确认删除 ${date} 的视频？`)) return;
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos/${date}`, { method: 'DELETE' });
+  if (res.ok) { document.getElementById(`vi-${date}`)?.remove(); loadVideos(); }
+}
+
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+loadStream();
+loadSnapshots();
+loadVideos();
+</script>
+</body>
+</html>

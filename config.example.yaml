@@ -1,0 +1,24 @@
+global:
+  interval: 60              # 抓帧间隔（秒）
+  retention_days: 30        # 快照保留天数
+  video_fps: 24             # 视频帧率
+  video_time: "00:05"       # 每日合成触发时间
+  watermark:
+    enabled: true
+    position: bottom-right  # top-left / top-right / bottom-left / bottom-right
+    font: fonts/NotoSansMono-Regular.ttf
+    size: 24
+    color: "white"
+    bg_color: "rgba(0,0,0,128)"  # 半透明背景
+    format: "%Y-%m-%d %H:%M:%S"
+
+cameras:
+  - name: "Front Door"
+    snapshot_url: "http://192.168.1.10/snapshot"
+    stream_url: "http://192.168.1.10/stream"
+    output_dir: "/data/front-door"
+    interval: 30
+
+  - name: "Garden"
+    snapshot_url: "http://192.168.1.11/snapshot"
+    output_dir: "/data/garden"

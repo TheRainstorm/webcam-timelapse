@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Webcam Timelapse</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>📷 Webcam Timelapse</h1>
+  <span class="subtitle">多摄像头延时摄影系统</span>
+</header>
+<main>
+  <div class="camera-grid" id="grid">
+    <div class="empty">加载中...</div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="streamModal">
+  <div class="modal">
+    <span class="modal-close" onclick="closeStream()">✕</span>
+    <div id="streamContent" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script>
+async function load() {
+  const res = await fetch('/api/cameras');
+  const cameras = await res.json();
+  const grid = document.getElementById('grid');
+  if (!cameras.length) { grid.innerHTML = '<div class="empty">暂无摄像头配置</div>'; return; }
+
+  grid.innerHTML = cameras.map(cam => {
+    const thumb = cam.latest_snapshot
+      ? `<img src="/api/cameras/${encodeURIComponent(cam.name)}/snapshots/${cam.latest_snapshot}" onerror="this.style.display='none'">`
+      : '';
+    const playBtn = cam.stream_url ? `<div class="play-btn">▶</div>` : '';
+    return `
+    <div class="camera-card">
+      <div class="camera-thumb" onclick="openStream('${cam.name}', '${cam.stream_url || ''}')">
+        ${thumb}
+        ${playBtn}
+      </div>
+      <div class="camera-info">
+        <h2>${cam.name}</h2>
+        <div class="camera-meta">
+          <span>今日 ${cam.today_count} 帧</span>
+          ${cam.stream_url ? '<span class="tag">实时流</span>' : ''}
+        </div>
+        <div class="camera-actions">
+          <a href="/camera.html?name=${encodeURIComponent(cam.name)}" class="btn btn-primary">详情</a>
+          <button class="btn" onclick="triggerCapture('${cam.name}', this)">立即抓帧</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openStream(name, url) {
+  if (!url) return;
+  const modal = document.getElementById('streamModal');
+  const content = document.getElementById('streamContent');
+  content.innerHTML = `<video src="${url}" autoplay controls style="max-width:80vw;max-height:70vh"></video>`;
+  modal.classList.add('open');
+}
+
+function closeStream() {
+  document.getElementById('streamModal').classList.remove('open');
+  document.getElementById('streamContent').innerHTML = '';
+}
+
+async function triggerCapture(name, btn) {
+  btn.disabled = true;
+  btn.textContent = '抓取中...';
+  try {
+    const res = await fetch(`/api/cameras/${encodeURIComponent(name)}/trigger`, { method: 'POST' });
+    if (res.ok) { btn.textContent = '✓ 成功'; setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; load(); }, 1500); }
+    else { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; }, 1500); }
+  } catch { btn.textContent = '错误'; btn.disabled = false; }
+}
+
+document.getElementById('streamModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeStream(); });
+load();
+</script>
+</body>
+</html>
