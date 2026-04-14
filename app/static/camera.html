@@ -30,8 +30,26 @@
         </div>
         <div class="compose-settings">
           <label>
-            <span>视频帧率</span>
-            <input id="composeFps" type="number" min="1" max="120" step="1" value="24">
+            <span>输出帧率</span>
+            <input id="composeFps" type="number" min="1" max="240" step="1" value="24" list="composeFpsOptions">
+            <datalist id="composeFpsOptions">
+              <option value="24"></option>
+              <option value="30"></option>
+              <option value="60"></option>
+              <option value="90"></option>
+              <option value="120"></option>
+              <option value="144"></option>
+              <option value="165"></option>
+            </datalist>
+          </label>
+          <label>
+            <span>快进系数</span>
+            <input id="composeFactor" type="number" min="0.1" max="1000" step="0.1" value="1.0" list="composeFactorOptions">
+            <datalist id="composeFactorOptions">
+              <option value="1.0"></option>
+              <option value="2.0"></option>
+              <option value="3.0"></option>
+            </datalist>
           </label>
           <label class="check-field">
             <input id="composeWatermark" type="checkbox" checked>
@@ -51,6 +69,7 @@
             <input id="composeWatermarkSize" type="number" min="8" max="96" step="1" value="24">
           </label>
         </div>
+        <div class="compose-estimate" id="composeEstimate">选择日期后显示预计视频信息</div>
       </div>
 
       <div class="panel">
@@ -117,6 +136,7 @@ let calendarMonth = '';
 let snapPage = 1;
 let snapSort = 'desc';
 const snapsPerPage = 24;
+let snapshotInterval = 60;
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let streamPlaying = false;
@@ -136,7 +156,7 @@ function renderStreamEmbed(url) {
   if (isWebRtcStream(url)) {
     return `<iframe class="stream-frame" src="${safeUrl}" allow="autoplay; fullscreen; microphone; camera" allowfullscreen></iframe>`;
   }
-  return `<video src="${safeUrl}" controls playsinline onclick="toggleMediaPlayback(this)"></video>`;
+  return `<video src="${safeUrl}" controls playsinline></video>`;
 }
 
 function isWebRtcStream(url) {
@@ -324,6 +344,7 @@ function renderCurrentDay() {
   renderCalendar();
   renderSnapshots();
   renderVideos();
+  updateComposeEstimate();
 }
 
 function renderSnapshots() {
@@ -403,10 +424,14 @@ async function loadStream() {
   const btn = document.getElementById('btnStream');
   if (!cam) return;
 
-  document.getElementById('composeFps').value = cam.video_fps || 24;
+  document.getElementById('composeFps').value = cam.video_fps || 60;
+  snapshotInterval = cam.interval || 30;
+  document.getElementById('composeFactor').value = cam.video_speed_factor || 1.0;
   document.getElementById('composeWatermark').checked = cam.watermark?.enabled !== false;
   document.getElementById('composeWatermarkPosition').value = cam.watermark?.position || 'bottom-right';
   document.getElementById('composeWatermarkSize').value = cam.watermark?.size || 24;
+  bindComposeEstimateInputs();
+  updateComposeEstimate();
 
   if (cam.stream_url) {
     streamUrl = cam.stream_url;
@@ -440,16 +465,8 @@ function viewSnap(date, file) {
 
 function playVideo(filename) {
   document.getElementById('modalContent').innerHTML =
-    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(filename)}" controls playsinline onclick="toggleMediaPlayback(this)" style="max-width:80vw;max-height:70vh"></video>`;
+    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(filename)}" controls playsinline preload="metadata" style="max-width:80vw;max-height:70vh"></video>`;
   document.getElementById('modal').classList.add('open');
-}
-
-function toggleMediaPlayback(media) {
-  if (media.paused) {
-    media.play();
-  } else {
-    media.pause();
-  }
 }
 
 function closeModal() {
@@ -465,16 +482,89 @@ async function triggerCapture() {
   setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; loadSnapshots(); }, 1500);
 }
 
-function composeQueryParams(targetDate) {
-  const fps = Number(document.getElementById('composeFps').value) || 24;
+function clampNumber(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function clampFloat(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function composeFps() {
+  return clampNumber(document.getElementById('composeFps').value, 1, 240, 30);
+}
+
+function composeFactor() {
+  return clampFloat(document.getElementById('composeFactor').value, 0.1, 1000, 1);
+}
+
+function composeSpeed() {
+  return composeFps() * snapshotInterval * composeFactor();
+}
+
+function composeFrameCount(sourceCount, fps, speed) {
+  if (!sourceCount) return 0;
+  return Math.max(1, Math.round(sourceCount * snapshotInterval * fps / speed));
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function updateComposeEstimate() {
+  const el = document.getElementById('composeEstimate');
+  if (!el) return;
+
+  const sourceCount = (snapData[selectedDate] || []).length;
+  const fps = composeFps();
+  const factor = composeFactor();
+  const speed = composeSpeed();
+  const outputFrames = composeFrameCount(sourceCount, fps, speed);
+  const duration = outputFrames ? outputFrames / fps : 0;
   const watermarkEnabled = document.getElementById('composeWatermark').checked;
-  const watermarkSize = Number(document.getElementById('composeWatermarkSize').value) || 24;
+  const position = document.getElementById('composeWatermarkPosition').selectedOptions[0]?.textContent || '-';
+  const size = clampNumber(document.getElementById('composeWatermarkSize').value, 8, 96, 24);
+
+  el.textContent = [
+    `原始 ${sourceCount} 张`,
+    `输出 ${outputFrames} 帧`,
+    `预计 ${formatDuration(duration)}`,
+    `帧率 ${fps}`,
+    `间隔 ${snapshotInterval}s`,
+    `系数 ${factor.toFixed(1)}`,
+    `快进 ${speed.toFixed(1)}x`,
+    watermarkEnabled ? `水印 ${position} / ${size}px` : '无水印'
+  ].join(' · ');
+}
+
+function bindComposeEstimateInputs() {
+  document.querySelectorAll('#composeFps, #composeFactor, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize')
+    .forEach(el => {
+      if (el.dataset.boundEstimate) return;
+      el.dataset.boundEstimate = '1';
+      el.addEventListener('input', updateComposeEstimate);
+      el.addEventListener('change', updateComposeEstimate);
+    });
+}
+
+function composeQueryParams(targetDate) {
+  const watermarkEnabled = document.getElementById('composeWatermark').checked;
   const params = new URLSearchParams({
     target_date: targetDate,
-    video_fps: String(Math.min(120, Math.max(1, Math.round(fps)))),
+    video_fps: String(composeFps()),
+    speed_multiplier: String(composeSpeed()),
     watermark_enabled: String(watermarkEnabled),
     watermark_position: document.getElementById('composeWatermarkPosition').value,
-    watermark_size: String(Math.min(96, Math.max(8, Math.round(watermarkSize))))
+    watermark_size: String(clampNumber(document.getElementById('composeWatermarkSize').value, 8, 96, 24))
   });
   return params.toString();
 }

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import logging
+import shutil
 import subprocess
 import tempfile
 from datetime import date, datetime, time, timedelta
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ComposeOptions:
     video_fps: int | None = None
+    speed_multiplier: float | None = None
     watermark: WatermarkConfig | None = None
 
 
@@ -34,17 +36,37 @@ def _prepare_frames(
     watermark: WatermarkConfig | None,
     temp_dir: Path,
 ) -> list[Path]:
-    if watermark is None or not watermark.enabled:
-        return frames
-
     prepared: list[Path] = []
     for idx, frame in enumerate(frames):
-        with Image.open(frame) as source:
-            img = apply_watermark(source, watermark, _frame_timestamp(target_date, frame))
         out = temp_dir / f"{idx:08d}.jpg"
-        img.save(out, "JPEG", quality=90)
+        if watermark is not None and watermark.enabled:
+            with Image.open(frame) as source:
+                img = apply_watermark(source, watermark, _frame_timestamp(target_date, frame))
+            img.save(out, "JPEG", quality=90)
+        else:
+            try:
+                out.symlink_to(frame.resolve())
+            except OSError:
+                shutil.copy2(frame, out)
         prepared.append(out)
     return prepared
+
+
+def _select_frames(
+    frames: list[Path],
+    snapshot_interval: int,
+    video_fps: int,
+    speed_multiplier: float,
+) -> list[Path]:
+    output_count = round(len(frames) * snapshot_interval * video_fps / speed_multiplier)
+    output_count = max(1, output_count)
+    if output_count == 1:
+        return [frames[0]]
+    if len(frames) == 1:
+        return [frames[0]] * output_count
+
+    last_idx = len(frames) - 1
+    return [frames[round(i * last_idx / (output_count - 1))] for i in range(output_count)]
 
 
 def compose_video(
@@ -73,26 +95,19 @@ def compose_video(
     video_dir.mkdir(parents=True, exist_ok=True)
     output = video_dir / f"{date_str}.mp4"
     video_fps = options.video_fps or cam.video_fps
+    speed_multiplier = options.speed_multiplier or cam.interval * video_fps * cam.video_speed_factor
     watermark = options.watermark if options.watermark is not None else cam.watermark
-
-    list_path = ""
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
-            video_frames = _prepare_frames(frames, target_date, watermark, temp_dir)
-
-            # 写帧列表文件
-            with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-                list_path = f.name
-                for frame in video_frames:
-                    f.write(f"file '{frame.resolve()}'\n")
-                    f.write(f"duration {1 / video_fps}\n")
+            sampled_frames = _select_frames(frames, cam.interval, video_fps, speed_multiplier)
+            _prepare_frames(sampled_frames, target_date, watermark, temp_dir)
 
             cmd = [
                 "ffmpeg", "-y",
-                "-f", "concat", "-safe", "0", "-i", list_path,
-                "-vf", f"fps={video_fps}",
+                "-framerate", str(video_fps),
+                "-i", str(temp_dir / "%08d.jpg"),
                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart",
                 str(output),
@@ -107,6 +122,3 @@ def compose_video(
     except Exception as e:
         logger.error("[%s] 合成异常: %s", cam.name, e)
         return None
-    finally:
-        if list_path:
-            Path(list_path).unlink(missing_ok=True)

@@ -22,9 +22,10 @@ class CameraConfig(BaseModel):
     snapshot_url: str
     stream_url: Optional[str] = None
     output_dir: str
-    interval: int = 60
+    interval: int = 30
     retention_days: int = 30
-    video_fps: int = 24
+    video_fps: int = 60
+    video_speed_factor: float = 1.0
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
 
@@ -37,9 +38,10 @@ class CameraConfig(BaseModel):
 
 
 class GlobalConfig(BaseModel):
-    interval: int = 60
+    interval: int = 30
     retention_days: int = 30
-    video_fps: int = 24
+    video_fps: int = 60
+    video_speed_factor: float = 1.0
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
 

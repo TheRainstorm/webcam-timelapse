@@ -136,7 +136,7 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 }
 .compose-settings input[type="number"],
 .compose-settings select {
-  width: 72px;
+  width: 84px;
   height: 30px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -146,6 +146,12 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 }
 .compose-settings select { width: 92px; }
 .compose-settings input[type="checkbox"] { accent-color: var(--accent); }
+.compose-estimate {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 .panel {
   background: var(--surface);

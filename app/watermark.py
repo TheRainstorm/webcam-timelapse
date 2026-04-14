@@ -30,7 +30,7 @@ def apply_watermark(img: Image.Image, cfg: WatermarkConfig, ts: datetime) -> Ima
     try:
         font = ImageFont.truetype(str(font_path), cfg.size)
     except (IOError, OSError):
-        font = ImageFont.load_default()
+        font = ImageFont.load_default(size=cfg.size)
 
     bbox = draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]

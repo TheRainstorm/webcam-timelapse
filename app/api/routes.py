@@ -7,8 +7,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.capture import capture_snapshot
 from app.composer import ComposeOptions, compose_video
@@ -54,7 +54,9 @@ async def list_cameras() -> list[dict[str, Any]]:
             "stream_url": cam.stream_url,
             "today_count": today_count,
             "latest_snapshot": latest,
+            "interval": cam.interval,
             "video_fps": cam.video_fps,
+            "video_speed_factor": cam.video_speed_factor,
             "watermark": cam.watermark.model_dump(),
         })
     return result
@@ -113,14 +115,17 @@ async def trigger_compose(
     name: str,
     target_date: str | None = None,
     video_fps: int | None = None,
+    speed_multiplier: float | None = None,
     watermark_enabled: bool | None = None,
     watermark_position: str | None = None,
     watermark_size: int | None = None,
 ) -> dict[str, Any]:
     cam = _get_cam(name)
     d = date.fromisoformat(target_date) if target_date else None
-    if video_fps is not None and not 1 <= video_fps <= 120:
-        raise HTTPException(400, "video_fps must be between 1 and 120")
+    if video_fps is not None and not 1 <= video_fps <= 240:
+        raise HTTPException(400, "video_fps must be between 1 and 240")
+    if speed_multiplier is not None and not 1 <= speed_multiplier <= 100000:
+        raise HTTPException(400, "speed_multiplier must be between 1 and 100000")
     if watermark_position is not None and watermark_position not in {
         "top-left",
         "top-right",
@@ -142,7 +147,11 @@ async def trigger_compose(
     if watermark_updates:
         watermark = watermark.model_copy(update=watermark_updates)
 
-    options = ComposeOptions(video_fps=video_fps, watermark=watermark)
+    options = ComposeOptions(
+        video_fps=video_fps,
+        speed_multiplier=speed_multiplier,
+        watermark=watermark,
+    )
     loop = asyncio.get_event_loop()
     path = await loop.run_in_executor(None, partial(compose_video, cam, d, options))
     if path is None:
@@ -159,10 +168,60 @@ async def get_snapshot_file(name: str, snap_date: str, filename: str) -> FileRes
     return FileResponse(str(path), media_type="image/jpeg")
 
 
+def _iter_file_range(path: Path, start: int, end: int, chunk_size: int = 1024 * 1024):
+    with path.open("rb") as f:
+        f.seek(start)
+        remaining = end - start + 1
+        while remaining > 0:
+            chunk = f.read(min(chunk_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @router.get("/cameras/{name}/videos/{filename}")
-async def get_video_file(name: str, filename: str) -> FileResponse:
+async def get_video_file(name: str, filename: str, request: Request):
     cam = _get_cam(name)
     path = Path(cam.output_dir) / "videos" / filename
     if not path.exists() or path.suffix != ".mp4":
         raise HTTPException(404, "Not found")
-    return FileResponse(str(path), media_type="video/mp4")
+
+    size = path.stat().st_size
+    range_header = request.headers.get("range")
+    headers = {"Accept-Ranges": "bytes"}
+    if not range_header:
+        headers["Content-Length"] = str(size)
+        return FileResponse(str(path), media_type="video/mp4", headers=headers)
+
+    try:
+        unit, range_value = range_header.split("=", 1)
+        if unit != "bytes":
+            raise ValueError
+        start_raw, end_raw = range_value.split("-", 1)
+        if start_raw:
+            start = int(start_raw)
+            end = int(end_raw) if end_raw else size - 1
+        else:
+            suffix_size = int(end_raw)
+            start = max(0, size - suffix_size)
+            end = size - 1
+        if start < 0 or end >= size or start > end:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(
+            status_code=416,
+            detail="Invalid range",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    headers.update({
+        "Content-Range": f"bytes {start}-{end}/{size}",
+        "Content-Length": str(end - start + 1),
+    })
+    return StreamingResponse(
+        _iter_file_range(path, start, end),
+        status_code=206,
+        media_type="video/mp4",
+        headers=headers,
+    )

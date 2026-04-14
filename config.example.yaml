@@ -1,7 +1,8 @@
 global:
-  interval: 60              # 抓帧间隔（秒）
+  interval: 30              # 抓帧间隔（秒）
   retention_days: 30        # 快照保留天数
-  video_fps: 24             # 视频帧率
+  video_fps: 60             # 合成视频输出帧率
+  video_speed_factor: 1.0   # 快进系数，实际快进倍数 = interval * video_fps * video_speed_factor
   video_time: "00:05"       # 每日合成触发时间
   watermark:
     enabled: true

@@ -73,9 +73,10 @@ CONFIG_PATH=/path/to/config.yaml uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 ```yaml
 global:
-  interval: 60
+  interval: 30
   retention_days: 30
-  video_fps: 24
+  video_fps: 60
+  video_speed_factor: 1.0
   video_time: "00:05"
   watermark:
     enabled: true
@@ -101,7 +102,8 @@ cameras:
 - `output_dir`: 必填，快照和视频的输出根目录。
 - `interval`: 抓帧间隔，单位秒。
 - `retention_days`: 快照保留天数。
-- `video_fps`: 合成视频帧率。
+- `video_fps`: 合成视频输出帧率。
+- `video_speed_factor`: 快进系数，实际快进倍数 = `interval * video_fps * video_speed_factor`。
 - `video_time`: 每日合成任务触发时间，格式为 `HH:MM`，默认合成前一天。
 - `watermark.font`: 水印字体路径；Docker Compose 会把 `./fonts` 挂载到 `/app/fonts`。
 
