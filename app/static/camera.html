@@ -46,7 +46,10 @@
         <div class="calendar-box">
           <div class="calendar-head">
             <button class="icon-btn" type="button" onclick="changeCalendarMonth(-1)">‹</button>
-            <button class="calendar-title" type="button" onclick="jumpToToday()" id="calendarTitle">-</button>
+            <div class="calendar-pickers">
+              <select id="calendarYear" onchange="changeCalendarPicker()"></select>
+              <select id="calendarMonth" onchange="changeCalendarPicker()"></select>
+            </div>
             <button class="icon-btn" type="button" onclick="changeCalendarMonth(1)">›</button>
           </div>
           <div class="calendar-weekdays">
@@ -54,7 +57,10 @@
           </div>
           <div class="calendar-grid" id="calendarGrid"></div>
         </div>
-        <div class="day-summary" id="daySummary">选择日期查看快照和视频</div>
+        <div class="history-toolbar">
+          <div class="day-summary" id="daySummary">选择日期查看快照和视频</div>
+          <button class="btn" id="btnSnapSort" type="button" onclick="toggleSnapSort()">快照：新到旧</button>
+        </div>
         <div class="snap-grid" id="snapGrid"><div class="empty">选择日期查看快照</div></div>
         <div class="pager" id="snapPager"></div>
       </div>
@@ -85,6 +91,7 @@ let videoData = [];
 let selectedDate = '';
 let calendarMonth = '';
 let snapPage = 1;
+let snapSort = 'desc';
 const snapsPerPage = 24;
 let streamUrl = '';
 let streamSnapshotUrl = '';
@@ -144,9 +151,8 @@ function formatMonth(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function monthLabel(month) {
-  const [year, m] = month.split('-');
-  return `${year} 年 ${Number(m)} 月`;
+function monthNumber(month) {
+  return Number(month.split('-')[1]);
 }
 
 function dateKey(date) {
@@ -172,10 +178,33 @@ function availableDates() {
   ])).sort();
 }
 
+function availableYears() {
+  const years = availableDates().map(d => d.slice(0, 4));
+  years.push(String(new Date().getFullYear()));
+  return Array.from(new Set(years)).sort((a, b) => Number(b) - Number(a));
+}
+
+function renderCalendarPickers() {
+  const [currentYear] = calendarMonth.split('-');
+  const yearSelect = document.getElementById('calendarYear');
+  const monthSelect = document.getElementById('calendarMonth');
+  const years = availableYears();
+
+  yearSelect.innerHTML = years.map(year =>
+    `<option value="${year}" ${year === currentYear ? 'selected' : ''}>${year} 年</option>`
+  ).join('');
+
+  monthSelect.innerHTML = Array.from({ length: 12 }, (_, i) => {
+    const value = String(i + 1).padStart(2, '0');
+    const selected = i + 1 === monthNumber(calendarMonth) ? 'selected' : '';
+    return `<option value="${value}" ${selected}>${i + 1} 月</option>`;
+  }).join('');
+}
+
 function renderCalendar() {
   if (!calendarMonth) calendarMonth = formatMonth(new Date());
 
-  document.getElementById('calendarTitle').textContent = monthLabel(calendarMonth);
+  renderCalendarPickers();
   const grid = document.getElementById('calendarGrid');
   const [year, month] = calendarMonth.split('-').map(Number);
   const first = new Date(year, month - 1, 1);
@@ -208,16 +237,32 @@ function renderCalendar() {
   grid.innerHTML = cells.join('');
 }
 
+function changeCalendarPicker() {
+  const year = document.getElementById('calendarYear').value;
+  const month = document.getElementById('calendarMonth').value;
+  calendarMonth = `${year}-${month}`;
+  selectMonthDate();
+}
+
+function selectMonthDate() {
+  const dates = availableDates().filter(d => d.startsWith(`${calendarMonth}-`));
+  selectedDate = dates[dates.length - 1] || `${calendarMonth}-01`;
+  snapPage = 1;
+  renderCurrentDay();
+}
+
 function changeCalendarMonth(delta) {
   if (!calendarMonth) calendarMonth = formatMonth(new Date());
   const [year, month] = calendarMonth.split('-').map(Number);
   calendarMonth = formatMonth(new Date(year, month - 1 + delta, 1));
-  renderCalendar();
+  selectMonthDate();
 }
 
-function jumpToToday() {
-  calendarMonth = formatMonth(new Date());
-  renderCalendar();
+function snapshotTime(filename) {
+  const base = String(filename).replace(/\.[^.]+$/, '');
+  const match = base.match(/(\d{2})[-_:.](\d{2})[-_:.](\d{2})$/);
+  if (match) return `${match[1]}:${match[2]}:${match[3]}`;
+  return base;
 }
 
 async function loadSnapshots() {
@@ -258,12 +303,16 @@ function renderCurrentDay() {
 }
 
 function renderSnapshots() {
-  const frames = snapData[selectedDate] || [];
+  const frames = [...(snapData[selectedDate] || [])].sort((a, b) =>
+    snapSort === 'desc' ? b.localeCompare(a) : a.localeCompare(b)
+  );
   const grid = document.getElementById('snapGrid');
   const pager = document.getElementById('snapPager');
   const videos = videoData.filter(v => v.date === selectedDate);
   document.getElementById('daySummary').textContent =
     `${selectedDate} · ${frames.length} 张快照 · ${videos.length} 个视频`;
+  document.getElementById('btnSnapSort').textContent =
+    snapSort === 'desc' ? '快照：新到旧' : '快照：旧到新';
 
   if (!frames.length) {
     grid.innerHTML = '<div class="empty">这一天暂无快照</div>';
@@ -277,8 +326,9 @@ function renderSnapshots() {
   const pageFrames = frames.slice(start, start + snapsPerPage);
 
   grid.innerHTML = pageFrames.map(f => `
-    <div class="snap-thumb" data-date="${escapeAttr(selectedDate)}" data-file="${escapeAttr(f)}" onclick="viewSnap(this.dataset.date, this.dataset.file)">
+    <div class="snap-thumb" data-date="${escapeAttr(selectedDate)}" data-file="${escapeAttr(f)}" title="${escapeAttr(snapshotTime(f))}" onclick="viewSnap(this.dataset.date, this.dataset.file)">
       <img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${selectedDate}/${encodeURIComponent(f)}" loading="lazy">
+      <span class="snap-time">${escapeAttr(snapshotTime(f))}</span>
     </div>`).join('');
 
   pager.innerHTML = `
@@ -290,6 +340,12 @@ function renderSnapshots() {
 
 function changeSnapPage(delta) {
   snapPage += delta;
+  renderSnapshots();
+}
+
+function toggleSnapSort() {
+  snapSort = snapSort === 'desc' ? 'asc' : 'desc';
+  snapPage = 1;
   renderSnapshots();
 }
 

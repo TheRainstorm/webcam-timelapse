@@ -183,7 +183,7 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   margin-bottom: 10px;
 }
 .icon-btn,
-.calendar-title {
+.calendar-pickers select {
   height: 32px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -195,12 +195,19 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   font-size: 20px;
   line-height: 1;
 }
-.calendar-title {
-  font-size: 13px;
-  font-weight: 600;
+.calendar-pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
+.calendar-pickers select {
+  width: 100%;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.calendar-pickers select:focus { outline: 1px solid var(--accent); }
 .icon-btn:hover,
-.calendar-title:hover { border-color: var(--accent); }
+.calendar-pickers select:hover { border-color: var(--accent); }
 .calendar-weekdays,
 .calendar-grid {
   display: grid;
@@ -268,9 +275,16 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 .video-dot { background: #8ee0bf; }
 .calendar-day.selected .dot { background: #fff; }
 .day-summary {
-  margin-bottom: 12px;
   color: var(--text-muted);
   font-size: 12px;
+}
+.history-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .snap-grid {
@@ -280,6 +294,7 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   min-height: 150px;
 }
 .snap-thumb {
+  position: relative;
   aspect-ratio: 16/9;
   background: #000;
   border-radius: 4px;
@@ -289,6 +304,20 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 }
 .snap-thumb:hover { border-color: var(--accent); }
 .snap-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.snap-time {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  background: rgba(0,0,0,.72);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.snap-thumb:hover .snap-time { opacity: 1; }
 .pager {
   min-height: 32px;
   margin-top: 12px;
