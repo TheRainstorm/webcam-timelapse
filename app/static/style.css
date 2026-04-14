@@ -115,6 +115,11 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 768px) { .detail-grid { grid-template-columns: 1fr; } }
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .panel {
   background: var(--surface);

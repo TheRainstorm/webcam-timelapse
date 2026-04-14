@@ -22,10 +22,11 @@
         <div class="stream-box" id="streamBox">
           <div class="stream-placeholder">无实时流配置</div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div class="preview-actions">
           <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
           <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
-          <button class="btn" id="btnCompose" onclick="triggerCompose()">合成昨日视频</button>
+          <button class="btn" id="btnCompose" onclick="triggerCompose()">合成选中日期视频</button>
+          <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
         </div>
       </div>
 
@@ -436,10 +437,47 @@ async function triggerCapture() {
 
 async function triggerCompose() {
   const btn = document.getElementById('btnCompose');
-  btn.disabled = true; btn.textContent = '合成中...';
-  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose`, { method: 'POST' });
-  btn.textContent = res.ok ? '✓ 完成' : '失败';
-  setTimeout(() => { btn.textContent = '合成昨日视频'; btn.disabled = false; loadVideos(); }, 2000);
+  const frames = snapData[selectedDate] || [];
+  if (!frames.length) {
+    btn.textContent = '无快照';
+    setTimeout(() => { btn.textContent = '合成选中日期视频'; }, 1500);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = `合成 ${selectedDate}...`;
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?target_date=${encodeURIComponent(selectedDate)}`, { method: 'POST' });
+  btn.textContent = res.ok ? '✓ 已覆盖' : '失败';
+  setTimeout(() => {
+    btn.textContent = '合成选中日期视频';
+    btn.disabled = false;
+    loadVideos();
+  }, 2000);
+}
+
+async function triggerComposeAll() {
+  const btn = document.getElementById('btnComposeAll');
+  const dates = Object.keys(snapData).sort();
+  if (!dates.length) {
+    btn.textContent = '无快照';
+    setTimeout(() => { btn.textContent = '合成全部日期视频'; }, 1500);
+    return;
+  }
+
+  btn.disabled = true;
+  let okCount = 0;
+  for (let i = 0; i < dates.length; i++) {
+    btn.textContent = `合成 ${i + 1}/${dates.length}`;
+    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?target_date=${encodeURIComponent(dates[i])}`, { method: 'POST' });
+    if (res.ok) okCount++;
+  }
+
+  btn.textContent = `完成 ${okCount}/${dates.length}`;
+  setTimeout(() => {
+    btn.textContent = '合成全部日期视频';
+    btn.disabled = false;
+    loadVideos();
+  }, 2000);
 }
 
 async function deleteVideo(date, btn) {
