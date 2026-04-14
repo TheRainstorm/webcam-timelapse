@@ -20,11 +20,61 @@
 <div class="modal-overlay" id="streamModal">
   <div class="modal">
     <span class="modal-close" onclick="closeStream()">✕</span>
-    <div id="streamContent" style="margin-top:10px"></div>
+    <div id="streamContent" class="stream-modal-content"></div>
   </div>
 </div>
 
 <script>
+function escapeAttr(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function latestSnapshotUrl(cam) {
+  if (!cam.latest_snapshot) return '';
+  const path = cam.latest_snapshot
+    .replace(/^snapshots\//, '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  return `/api/cameras/${encodeURIComponent(cam.name)}/snapshots/${path}`;
+}
+
+function renderStreamEmbed(url) {
+  const safeUrl = escapeAttr(url);
+  if (isWebRtcStream(url)) {
+    return `<iframe class="stream-frame" src="${safeUrl}" allow="autoplay; fullscreen; microphone; camera" allowfullscreen></iframe>`;
+  }
+  return `<video src="${safeUrl}" autoplay controls playsinline></video>`;
+}
+
+function isWebRtcStream(url) {
+  try {
+    const parsed = new URL(url, location.href);
+    const path = parsed.pathname.toLowerCase();
+    const query = parsed.search.toLowerCase();
+    return path.includes('/webrtc') || query.includes('webrtc');
+  } catch {
+    return String(url).toLowerCase().includes('webrtc');
+  }
+}
+
+function renderStreamPoster(snapshotUrl) {
+  if (snapshotUrl) {
+    return `
+      <button class="stream-poster" type="button" onclick="playStreamFromPoster()">
+        <img src="${escapeAttr(snapshotUrl)}" alt="">
+        <span class="play-btn">▶</span>
+      </button>`;
+  }
+  return '<button class="stream-poster stream-placeholder" type="button" onclick="playStreamFromPoster()">点击播放实时预览</button>';
+}
+
 async function load() {
   const res = await fetch('/api/cameras');
   const cameras = await res.json();
@@ -32,13 +82,14 @@ async function load() {
   if (!cameras.length) { grid.innerHTML = '<div class="empty">暂无摄像头配置</div>'; return; }
 
   grid.innerHTML = cameras.map(cam => {
-    const thumb = cam.latest_snapshot
-      ? `<img src="/api/cameras/${encodeURIComponent(cam.name)}/snapshots/${cam.latest_snapshot}" onerror="this.style.display='none'">`
+    const snapshotUrl = latestSnapshotUrl(cam);
+    const thumb = snapshotUrl
+      ? `<img src="${escapeAttr(snapshotUrl)}" onerror="this.style.display='none'">`
       : '';
     const playBtn = cam.stream_url ? `<div class="play-btn">▶</div>` : '';
     return `
     <div class="camera-card">
-      <div class="camera-thumb" onclick="openStream('${cam.name}', '${cam.stream_url || ''}')">
+      <div class="camera-thumb" data-stream-url="${escapeAttr(cam.stream_url || '')}" data-snapshot-url="${escapeAttr(snapshotUrl)}" onclick="openStreamFromThumb(this)">
         ${thumb}
         ${playBtn}
       </div>
@@ -57,17 +108,30 @@ async function load() {
   }).join('');
 }
 
-function openStream(name, url) {
+let activeStreamUrl = '';
+
+function openStreamFromThumb(el) {
+  openStream(el.dataset.streamUrl || '', el.dataset.snapshotUrl || '');
+}
+
+function openStream(url, snapshotUrl) {
   if (!url) return;
   const modal = document.getElementById('streamModal');
   const content = document.getElementById('streamContent');
-  content.innerHTML = `<video src="${url}" autoplay controls style="max-width:80vw;max-height:70vh"></video>`;
+  activeStreamUrl = url;
+  content.innerHTML = renderStreamPoster(snapshotUrl);
   modal.classList.add('open');
+}
+
+function playStreamFromPoster() {
+  if (!activeStreamUrl) return;
+  document.getElementById('streamContent').innerHTML = renderStreamEmbed(activeStreamUrl);
 }
 
 function closeStream() {
   document.getElementById('streamModal').classList.remove('open');
   document.getElementById('streamContent').innerHTML = '';
+  activeStreamUrl = '';
 }
 
 async function triggerCapture(name, btn) {

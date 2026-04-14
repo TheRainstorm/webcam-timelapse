@@ -23,6 +23,7 @@
           <div class="stream-placeholder">无实时流配置</div>
         </div>
         <div style="display:flex;gap:8px">
+          <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
           <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
           <button class="btn" id="btnCompose" onclick="triggerCompose()">合成昨日视频</button>
         </div>
@@ -68,6 +69,59 @@ document.getElementById('camTitle').textContent = camName;
 document.title = camName + ' — Webcam Timelapse';
 
 let snapData = {};
+let streamUrl = '';
+let streamSnapshotUrl = '';
+let streamPlaying = false;
+
+function escapeAttr(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
+}
+
+function renderStreamEmbed(url) {
+  const safeUrl = escapeAttr(url);
+  if (isWebRtcStream(url)) {
+    return `<iframe class="stream-frame" src="${safeUrl}" allow="autoplay; fullscreen; microphone; camera" allowfullscreen></iframe>`;
+  }
+  return `<video src="${safeUrl}" controls playsinline onclick="toggleMediaPlayback(this)"></video>`;
+}
+
+function isWebRtcStream(url) {
+  try {
+    const parsed = new URL(url, location.href);
+    const path = parsed.pathname.toLowerCase();
+    const query = parsed.search.toLowerCase();
+    return path.includes('/webrtc') || query.includes('webrtc');
+  } catch {
+    return String(url).toLowerCase().includes('webrtc');
+  }
+}
+
+function latestSnapshotUrl(cam) {
+  if (!cam.latest_snapshot) return '';
+  const path = cam.latest_snapshot
+    .replace(/^snapshots\//, '')
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  return `/api/cameras/${encodeURIComponent(cam.name)}/snapshots/${path}`;
+}
+
+function renderStreamPoster() {
+  if (streamSnapshotUrl) {
+    return `
+      <button class="stream-poster" type="button" onclick="toggleStream()">
+        <img src="${escapeAttr(streamSnapshotUrl)}" alt="">
+        <span class="play-btn">▶</span>
+      </button>`;
+  }
+  return '<button class="stream-poster stream-placeholder" type="button" onclick="toggleStream()">点击播放实时预览</button>';
+}
 
 async function loadSnapshots() {
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/snapshots`);
@@ -124,9 +178,28 @@ async function loadStream() {
   const res = await fetch('/api/cameras');
   const cameras = await res.json();
   const cam = cameras.find(c => c.name === camName);
+  const btn = document.getElementById('btnStream');
   if (cam && cam.stream_url) {
-    document.getElementById('streamBox').innerHTML =
-      `<video src="${cam.stream_url}" autoplay muted controls></video>`;
+    streamUrl = cam.stream_url;
+    streamSnapshotUrl = latestSnapshotUrl(cam);
+    btn.disabled = false;
+    document.getElementById('streamBox').innerHTML = renderStreamPoster();
+  }
+}
+
+function toggleStream() {
+  if (!streamUrl) return;
+
+  const box = document.getElementById('streamBox');
+  const btn = document.getElementById('btnStream');
+  streamPlaying = !streamPlaying;
+
+  if (streamPlaying) {
+    box.innerHTML = renderStreamEmbed(streamUrl);
+    btn.textContent = '暂停实时预览';
+  } else {
+    box.innerHTML = renderStreamPoster();
+    btn.textContent = '播放实时预览';
   }
 }
 
@@ -138,8 +211,16 @@ function viewSnap(date, file) {
 
 function playVideo(filename) {
   document.getElementById('modalContent').innerHTML =
-    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${filename}" controls autoplay style="max-width:80vw;max-height:70vh"></video>`;
+    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${escapeAttr(filename)}" controls playsinline onclick="toggleMediaPlayback(this)" style="max-width:80vw;max-height:70vh"></video>`;
   document.getElementById('modal').classList.add('open');
+}
+
+function toggleMediaPlayback(media) {
+  if (media.paused) {
+    media.play();
+  } else {
+    media.pause();
+  }
 }
 
 function closeModal() {

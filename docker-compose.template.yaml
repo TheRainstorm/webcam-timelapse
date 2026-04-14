@@ -10,3 +10,4 @@ services:
     restart: unless-stopped
     environment:
       - CONFIG_PATH=/app/config.yaml
+      - TZ=Asia/Shanghai
