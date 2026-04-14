@@ -43,8 +43,20 @@
     <div>
       <div class="panel" style="margin-bottom:20px">
         <h3>历史快照</h3>
-        <div class="date-tabs" id="dateTabs"></div>
+        <div class="calendar-box">
+          <div class="calendar-head">
+            <button class="icon-btn" type="button" onclick="changeCalendarMonth(-1)">‹</button>
+            <button class="calendar-title" type="button" onclick="jumpToToday()" id="calendarTitle">-</button>
+            <button class="icon-btn" type="button" onclick="changeCalendarMonth(1)">›</button>
+          </div>
+          <div class="calendar-weekdays">
+            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+        <div class="day-summary" id="daySummary">选择日期查看快照和视频</div>
         <div class="snap-grid" id="snapGrid"><div class="empty">选择日期查看快照</div></div>
+        <div class="pager" id="snapPager"></div>
       </div>
 
       <div class="panel">
@@ -69,6 +81,11 @@ document.getElementById('camTitle').textContent = camName;
 document.title = camName + ' — Webcam Timelapse';
 
 let snapData = {};
+let videoData = [];
+let selectedDate = '';
+let calendarMonth = '';
+let snapPage = 1;
+const snapsPerPage = 24;
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let streamPlaying = false;
@@ -123,53 +140,178 @@ function renderStreamPoster() {
   return '<button class="stream-poster stream-placeholder" type="button" onclick="toggleStream()">点击播放实时预览</button>';
 }
 
+function formatMonth(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(month) {
+  const [year, m] = month.split('-');
+  return `${year} 年 ${Number(m)} 月`;
+}
+
+function dateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
+}
+
+function hasSnapshot(date) {
+  return (snapData[date] || []).length > 0;
+}
+
+function hasVideo(date) {
+  return videoData.some(v => v.date === date);
+}
+
+function availableDates() {
+  return Array.from(new Set([
+    ...Object.keys(snapData),
+    ...videoData.map(v => v.date)
+  ])).sort();
+}
+
+function renderCalendar() {
+  if (!calendarMonth) calendarMonth = formatMonth(new Date());
+
+  document.getElementById('calendarTitle').textContent = monthLabel(calendarMonth);
+  const grid = document.getElementById('calendarGrid');
+  const [year, month] = calendarMonth.split('-').map(Number);
+  const first = new Date(year, month - 1, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [];
+
+  for (let i = 0; i < startOffset; i++) {
+    cells.push('<div class="calendar-day muted"></div>');
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const current = `${calendarMonth}-${String(day).padStart(2, '0')}`;
+    const flags = [
+      hasSnapshot(current) || hasVideo(current) ? 'has-data' : '',
+      current === selectedDate ? 'selected' : '',
+      current === dateKey(new Date()) ? 'today' : ''
+    ].filter(Boolean).join(' ');
+    const dots = [
+      hasSnapshot(current) ? '<span class="dot snap-dot"></span>' : '',
+      hasVideo(current) ? '<span class="dot video-dot"></span>' : ''
+    ].join('');
+    cells.push(`
+      <button class="calendar-day ${flags}" type="button" onclick="selectDate('${current}')">
+        <span>${day}</span>
+        <span class="day-dots">${dots}</span>
+      </button>`);
+  }
+
+  grid.innerHTML = cells.join('');
+}
+
+function changeCalendarMonth(delta) {
+  if (!calendarMonth) calendarMonth = formatMonth(new Date());
+  const [year, month] = calendarMonth.split('-').map(Number);
+  calendarMonth = formatMonth(new Date(year, month - 1 + delta, 1));
+  renderCalendar();
+}
+
+function jumpToToday() {
+  calendarMonth = formatMonth(new Date());
+  renderCalendar();
+}
+
 async function loadSnapshots() {
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/snapshots`);
   const data = await res.json();
   snapData = data.dates || {};
 
-  const tabs = document.getElementById('dateTabs');
   const dates = Object.keys(snapData).sort().reverse();
-  if (!dates.length) { tabs.innerHTML = ''; document.getElementById('snapGrid').innerHTML = '<div class="empty">暂无快照</div>'; return; }
 
-  tabs.innerHTML = dates.map((d, i) =>
-    `<div class="date-tab${i===0?' active':''}" onclick="selectDate('${d}', this)">${d}</div>`
-  ).join('');
-
-  // 统计
   let total = 0;
   dates.forEach(d => total += snapData[d].length);
   document.getElementById('statSnaps').textContent = total;
   document.getElementById('statDays').textContent = dates.length;
 
-  selectDate(dates[0], tabs.firstChild);
+  syncDefaultDate();
+  renderCurrentDay();
 }
 
-function selectDate(d, el) {
-  document.querySelectorAll('.date-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  const frames = snapData[d] || [];
+function syncDefaultDate() {
+  const dates = availableDates();
+  if (!selectedDate || !dates.includes(selectedDate)) {
+    selectedDate = dates[dates.length - 1] || dateKey(new Date());
+  }
+  calendarMonth = selectedDate.slice(0, 7);
+}
+
+function selectDate(d) {
+  selectedDate = d;
+  snapPage = 1;
+  calendarMonth = d.slice(0, 7);
+  renderCurrentDay();
+}
+
+function renderCurrentDay() {
+  renderCalendar();
+  renderSnapshots();
+  renderVideos();
+}
+
+function renderSnapshots() {
+  const frames = snapData[selectedDate] || [];
   const grid = document.getElementById('snapGrid');
-  if (!frames.length) { grid.innerHTML = '<div class="empty">无快照</div>'; return; }
-  grid.innerHTML = frames.map(f => `
-    <div class="snap-thumb" onclick="viewSnap('${d}','${f}')">
-      <img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${d}/${f}" loading="lazy">
+  const pager = document.getElementById('snapPager');
+  const videos = videoData.filter(v => v.date === selectedDate);
+  document.getElementById('daySummary').textContent =
+    `${selectedDate} · ${frames.length} 张快照 · ${videos.length} 个视频`;
+
+  if (!frames.length) {
+    grid.innerHTML = '<div class="empty">这一天暂无快照</div>';
+    pager.innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(frames.length / snapsPerPage));
+  snapPage = Math.min(Math.max(1, snapPage), totalPages);
+  const start = (snapPage - 1) * snapsPerPage;
+  const pageFrames = frames.slice(start, start + snapsPerPage);
+
+  grid.innerHTML = pageFrames.map(f => `
+    <div class="snap-thumb" data-date="${escapeAttr(selectedDate)}" data-file="${escapeAttr(f)}" onclick="viewSnap(this.dataset.date, this.dataset.file)">
+      <img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${selectedDate}/${encodeURIComponent(f)}" loading="lazy">
     </div>`).join('');
+
+  pager.innerHTML = `
+    <button class="btn" onclick="changeSnapPage(-1)" ${snapPage === 1 ? 'disabled' : ''}>上一页</button>
+    <span>${snapPage} / ${totalPages}</span>
+    <button class="btn" onclick="changeSnapPage(1)" ${snapPage === totalPages ? 'disabled' : ''}>下一页</button>
+  `;
+}
+
+function changeSnapPage(delta) {
+  snapPage += delta;
+  renderSnapshots();
 }
 
 async function loadVideos() {
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos`);
   const data = await res.json();
+  videoData = data.videos || [];
+  document.getElementById('statVideos').textContent = videoData.length;
+  syncDefaultDate();
+  renderCurrentDay();
+}
+
+function renderVideos() {
   const list = document.getElementById('videoList');
-  const videos = data.videos || [];
-  document.getElementById('statVideos').textContent = videos.length;
-  if (!videos.length) { list.innerHTML = '<div class="empty">暂无视频</div>'; return; }
-  list.innerHTML = videos.reverse().map(v => `
+  const videos = videoData.filter(v => v.date === selectedDate).sort((a, b) => b.date.localeCompare(a.date));
+  if (!videos.length) { list.innerHTML = '<div class="empty">这一天暂无延时视频</div>'; return; }
+  list.innerHTML = videos.map(v => `
     <div class="video-item" id="vi-${v.date}">
       <span class="video-date">${v.date}</span>
       <span class="video-size">${(v.size/1024/1024).toFixed(1)} MB</span>
-      <button class="btn" onclick="playVideo('${v.filename}')">▶ 播放</button>
-      <a class="btn" href="/api/cameras/${encodeURIComponent(camName)}/videos/${v.filename}" download>↓</a>
+      <button class="btn" data-filename="${escapeAttr(v.filename)}" onclick="playVideo(this.dataset.filename)">▶ 播放</button>
+      <a class="btn" href="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(v.filename)}" download>↓</a>
       <button class="btn btn-danger" onclick="deleteVideo('${v.date}', this)">删除</button>
     </div>`).join('');
 }
@@ -205,13 +347,13 @@ function toggleStream() {
 
 function viewSnap(date, file) {
   document.getElementById('modalContent').innerHTML =
-    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${date}/${file}" style="max-width:80vw;max-height:75vh">`;
+    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${encodeURIComponent(date)}/${encodeURIComponent(file)}" style="max-width:80vw;max-height:75vh">`;
   document.getElementById('modal').classList.add('open');
 }
 
 function playVideo(filename) {
   document.getElementById('modalContent').innerHTML =
-    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${escapeAttr(filename)}" controls playsinline onclick="toggleMediaPlayback(this)" style="max-width:80vw;max-height:70vh"></video>`;
+    `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(filename)}" controls playsinline onclick="toggleMediaPlayback(this)" style="max-width:80vw;max-height:70vh"></video>`;
   document.getElementById('modal').classList.add('open');
 }
 
