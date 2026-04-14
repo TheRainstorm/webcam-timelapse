@@ -1,0 +1,12 @@
+services:
+  timelapse:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/data
+      - ./fonts:/app/fonts:ro
+    restart: unless-stopped
+    environment:
+      - CONFIG_PATH=/app/config.yaml
