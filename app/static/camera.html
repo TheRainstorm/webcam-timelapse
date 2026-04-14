@@ -28,6 +28,29 @@
           <button class="btn" id="btnCompose" onclick="triggerCompose()">合成选中日期视频</button>
           <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
         </div>
+        <div class="compose-settings">
+          <label>
+            <span>视频帧率</span>
+            <input id="composeFps" type="number" min="1" max="120" step="1" value="24">
+          </label>
+          <label class="check-field">
+            <input id="composeWatermark" type="checkbox" checked>
+            <span>合成时添加水印</span>
+          </label>
+          <label>
+            <span>水印位置</span>
+            <select id="composeWatermarkPosition">
+              <option value="top-left">左上角</option>
+              <option value="top-right">右上角</option>
+              <option value="bottom-left">左下角</option>
+              <option value="bottom-right">右下角</option>
+            </select>
+          </label>
+          <label>
+            <span>水印大小</span>
+            <input id="composeWatermarkSize" type="number" min="8" max="96" step="1" value="24">
+          </label>
+        </div>
       </div>
 
       <div class="panel">
@@ -378,7 +401,14 @@ async function loadStream() {
   const cameras = await res.json();
   const cam = cameras.find(c => c.name === camName);
   const btn = document.getElementById('btnStream');
-  if (cam && cam.stream_url) {
+  if (!cam) return;
+
+  document.getElementById('composeFps').value = cam.video_fps || 24;
+  document.getElementById('composeWatermark').checked = cam.watermark?.enabled !== false;
+  document.getElementById('composeWatermarkPosition').value = cam.watermark?.position || 'bottom-right';
+  document.getElementById('composeWatermarkSize').value = cam.watermark?.size || 24;
+
+  if (cam.stream_url) {
     streamUrl = cam.stream_url;
     streamSnapshotUrl = latestSnapshotUrl(cam);
     btn.disabled = false;
@@ -435,6 +465,20 @@ async function triggerCapture() {
   setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; loadSnapshots(); }, 1500);
 }
 
+function composeQueryParams(targetDate) {
+  const fps = Number(document.getElementById('composeFps').value) || 24;
+  const watermarkEnabled = document.getElementById('composeWatermark').checked;
+  const watermarkSize = Number(document.getElementById('composeWatermarkSize').value) || 24;
+  const params = new URLSearchParams({
+    target_date: targetDate,
+    video_fps: String(Math.min(120, Math.max(1, Math.round(fps)))),
+    watermark_enabled: String(watermarkEnabled),
+    watermark_position: document.getElementById('composeWatermarkPosition').value,
+    watermark_size: String(Math.min(96, Math.max(8, Math.round(watermarkSize))))
+  });
+  return params.toString();
+}
+
 async function triggerCompose() {
   const btn = document.getElementById('btnCompose');
   const frames = snapData[selectedDate] || [];
@@ -446,7 +490,7 @@ async function triggerCompose() {
 
   btn.disabled = true;
   btn.textContent = `合成 ${selectedDate}...`;
-  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?target_date=${encodeURIComponent(selectedDate)}`, { method: 'POST' });
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${composeQueryParams(selectedDate)}`, { method: 'POST' });
   btn.textContent = res.ok ? '✓ 已覆盖' : '失败';
   setTimeout(() => {
     btn.textContent = '合成选中日期视频';
@@ -468,7 +512,7 @@ async function triggerComposeAll() {
   let okCount = 0;
   for (let i = 0; i < dates.length; i++) {
     btn.textContent = `合成 ${i + 1}/${dates.length}`;
-    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?target_date=${encodeURIComponent(dates[i])}`, { method: 'POST' });
+    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${composeQueryParams(dates[i])}`, { method: 'POST' });
     if (res.ok) okCount++;
   }
 

@@ -9,13 +9,12 @@ import httpx
 from PIL import Image
 
 from app.config import CameraConfig
-from app.watermark import apply_watermark
 
 logger = logging.getLogger(__name__)
 
 
 async def capture_snapshot(cam: CameraConfig) -> Path | None:
-    """抓取一帧，打水印，保存到 output_dir/snapshots/YYYY-MM-DD/HH-MM-SS.jpg"""
+    """抓取一帧原始快照，保存到 output_dir/snapshots/YYYY-MM-DD/HH-MM-SS.jpg"""
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H-%M-%S")
@@ -33,11 +32,8 @@ async def capture_snapshot(cam: CameraConfig) -> Path | None:
         logger.warning("[%s] 抓帧失败: %s", cam.name, e)
         return None
 
-    try:
-        img = apply_watermark(img, cam.watermark, now)
-    except Exception as e:
-        logger.warning("[%s] 水印失败: %s", cam.name, e)
-
+    if img.mode != "RGB":
+        img = img.convert("RGB")
     img.save(save_path, "JPEG", quality=90)
     logger.debug("[%s] 保存快照: %s", cam.name, save_path)
     return save_path

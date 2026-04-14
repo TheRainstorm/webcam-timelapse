@@ -120,6 +120,32 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   gap: 8px;
   flex-wrap: wrap;
 }
+.compose-settings {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.compose-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.compose-settings input[type="number"],
+.compose-settings select {
+  width: 72px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 0 8px;
+}
+.compose-settings select { width: 92px; }
+.compose-settings input[type="checkbox"] { accent-color: var(--accent); }
 
 .panel {
   background: var(--surface);
