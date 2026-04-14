@@ -135,6 +135,7 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   gap: 8px;
 }
 .compose-settings input[type="number"],
+.compose-settings input[type="text"],
 .compose-settings select {
   width: 84px;
   height: 30px;
@@ -145,6 +146,11 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   padding: 0 8px;
 }
 .compose-settings select { width: 92px; }
+.combo-field {
+  display: inline-flex;
+  gap: 6px;
+}
+.combo-field select { width: 78px; }
 .compose-settings input[type="checkbox"] { accent-color: var(--accent); }
 .compose-estimate {
   margin-top: 8px;
