@@ -2,6 +2,10 @@
 
 一个多摄像头延时摄影服务。它会按配置定时从网络摄像头的 JPEG snapshot 地址抓帧、叠加时间水印、按天合成 MP4 延时视频，并提供 FastAPI + 静态页面用于查看摄像头状态、快照和视频。
 
+![index.png](https://imagebed.yfycloud.site/2026/04/1423c169cc2126b0ba121c568f516f63.png)
+
+![video.png](https://imagebed.yfycloud.site/2026/04/2dc12a61fa47cfff303dad827d303e0a.png)
+
 ## Features
 
 - 多摄像头配置，支持全局默认值和摄像头级覆盖。
