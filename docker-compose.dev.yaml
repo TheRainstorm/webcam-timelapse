@@ -1,6 +1,8 @@
 services:
   nginx:
-    image: rzero/webcam-timelapse-nginx:latest
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
     ports:
       - "4433:4433"
     restart: unless-stopped
@@ -18,7 +20,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   timelapse:
-    image: rzero/webcam-timelapse:latest
+    build: .
     expose:
       - "8080"
     volumes:

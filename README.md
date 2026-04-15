@@ -34,13 +34,14 @@ cameras:
 3. 启动服务：
 
 ```bash
-docker compose up -d --build
+cp docker-compose.example.yaml docker-compose.yaml
+docker compose up -d
 ```
 
 4. 打开 Web 界面：
 
 ```text
-http://localhost:8080
+http://localhost:4433
 ```
 
 5. 查看日志：
@@ -51,7 +52,7 @@ docker compose logs -f timelapse
 
 ### Docker Nginx Reverse Proxy
 
-`docker-compose.template.yaml` 包含一个可选的 `nginx` 服务。容器启动时会根据环境变量生成 Nginx 配置：
+`docker-compose.example.yaml` 使用发布镜像，包含一个 `nginx` 服务。容器启动时会根据环境变量生成 Nginx 配置：
 
 - `/` 反代到 timelapse Web。
 - `/go2rtc/` 反代到 go2rtc WebRTC 服务，并自动去掉 `/go2rtc/` 前缀。
@@ -79,6 +80,32 @@ stream_url: "/go2rtc/webrtc.html?src=front-door"
 ```
 
 公网访问 `https://timelapse.yfycloud.site:4433` 时，浏览器会自动用同一个域名加载 `/go2rtc/...`。
+
+### Docker Images
+
+发布部署使用两个镜像：
+
+- `rzero/webcam-timelapse:latest`: FastAPI 应用和静态页面。
+- `rzero/webcam-timelapse-nginx:latest`: Nginx 反向代理，负责 `/` 和 `/go2rtc/` 路由。
+
+可以在同一次发布流程里一起构建和推送：
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t rzero/webcam-timelapse:latest \
+  --push .
+
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f docker/nginx/Dockerfile \
+  -t rzero/webcam-timelapse-nginx:latest \
+  --push .
+```
+
+本地开发使用 `docker-compose.dev.yaml`，它会从当前代码 build 镜像：
+
+```bash
+docker compose -f docker-compose.dev.yaml up -d --build
+```
 
 ### Local Python
 
@@ -186,7 +213,8 @@ curl -X POST "http://localhost:8080/api/cameras/Front%20Door/compose?target_date
 │   ├── watermark.py       # 水印处理
 │   └── static/            # Web 静态页面
 ├── config.example.yaml
-├── docker-compose.yml
+├── docker-compose.example.yaml
+├── docker-compose.dev.yaml
 ├── Dockerfile
 ├── fonts/
 └── requirements.txt
