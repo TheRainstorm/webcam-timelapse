@@ -81,6 +81,54 @@ stream_url: "/go2rtc/webrtc.html?src=front-door"
 
 公网访问 `https://timelapse.yfycloud.site:4433` 时，浏览器会自动用同一个域名加载 `/go2rtc/...`。
 
+#### Outer Nginx with TLS and Basic Auth
+
+如果公网机器上还要再做一层 Nginx，推荐分工如下：
+
+- 外层 Nginx：TLS + Basic Auth + 全部转发到 Docker Nginx。
+- Docker Nginx：`/` -> timelapse，`/go2rtc/` -> go2rtc。
+
+先创建 Basic Auth 密码文件：
+
+```bash
+sudo apt-get install -y apache2-utils
+sudo htpasswd -c /etc/nginx/.htpasswd-timelapse timelapse
+```
+
+外层 Nginx 示例，假设 Docker Nginx 映射到宿主机 `127.0.0.1:7788`：
+
+```nginx
+server {
+    listen 4433 ssl http2;
+    listen [::]:4433 ssl http2;
+    server_name timelapse.yfycloud.site;
+
+    ssl_certificate     /etc/letsencrypt/live/timelapse.yfycloud.site/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/timelapse.yfycloud.site/privkey.pem;
+
+    auth_basic "Webcam Timelapse";
+    auth_basic_user_file /etc/nginx/.htpasswd-timelapse;
+
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:7788;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+这种方式下，外层 Nginx 不需要再单独写 `/go2rtc/` 分流，直接把所有路径转给 Docker Nginx 即可。Docker Nginx 会继续处理 `/go2rtc/` 前缀。普通 Web/API 不需要关闭 buffering；如需针对 WebRTC 关闭 buffering，应放在 Docker Nginx 的 `/go2rtc/` location 中。
+
 ### Docker Images
 
 发布部署使用两个镜像：
