@@ -27,7 +27,7 @@ cp config.example.yaml config.yaml
 cameras:
   - name: "Front Door"
     snapshot_url: "http://192.168.1.10/snapshot"
-    stream_url: "http://192.168.1.10/stream"
+    stream_url: "/go2rtc/webrtc.html?src=front-door"
     output_dir: "/data/front-door"
 ```
 
@@ -48,6 +48,37 @@ http://localhost:8080
 ```bash
 docker compose logs -f timelapse
 ```
+
+### Docker Nginx Reverse Proxy
+
+`docker-compose.template.yaml` 包含一个可选的 `nginx` 服务。容器启动时会根据环境变量生成 Nginx 配置：
+
+- `/` 反代到 timelapse Web。
+- `/go2rtc/` 反代到 go2rtc WebRTC 服务，并自动去掉 `/go2rtc/` 前缀。
+
+常用环境变量：
+
+```yaml
+environment:
+  - SERVER_NAME=timelapse.yfycloud.site
+  - LISTEN_PORT=4433
+  - TIMELAPSE_UPSTREAM=http://timelapse:8080
+  - GO2RTC_UPSTREAM=http://go2rtc:1984
+```
+
+如果 go2rtc 跑在宿主机或另一台内网机器，把 `GO2RTC_UPSTREAM` 改成 Docker 容器可访问的地址，例如：
+
+```yaml
+GO2RTC_UPSTREAM=http://host.docker.internal:1984
+```
+
+此时相机配置里的实时预览地址只写 path：
+
+```yaml
+stream_url: "/go2rtc/webrtc.html?src=front-door"
+```
+
+公网访问 `https://timelapse.yfycloud.site:4433` 时，浏览器会自动用同一个域名加载 `/go2rtc/...`。
 
 ### Local Python
 
@@ -90,7 +121,7 @@ global:
 cameras:
   - name: "Front Door"
     snapshot_url: "http://192.168.1.10/snapshot"
-    stream_url: "http://192.168.1.10/stream"
+    stream_url: "/go2rtc/webrtc.html?src=front-door"
     output_dir: "/data/front-door"
     interval: 30
 ```
@@ -98,7 +129,7 @@ cameras:
 关键字段：
 
 - `snapshot_url`: 必填，返回 JPEG 图片的摄像头截图地址。
-- `stream_url`: 可选，用于前端实时预览。
+- `stream_url`: 可选，用于前端实时预览；建议只配置 path，例如 `/go2rtc/webrtc.html?src=front-door`，由当前访问域名和反向代理补全。
 - `output_dir`: 必填，快照和视频的输出根目录。
 - `interval`: 抓帧间隔，单位秒。
 - `retention_days`: 快照保留天数。

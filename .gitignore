@@ -1,5 +1,5 @@
 config.yaml
-config_host.yaml
-.codex
-docker-compose.yml
 docker-compose.yaml
+
+.codex
+tmp/

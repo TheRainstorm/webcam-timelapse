@@ -16,7 +16,7 @@ global:
 cameras:
   - name: "Front Door"
     snapshot_url: "http://192.168.1.10/snapshot"
-    stream_url: "http://192.168.1.10/stream"
+    stream_url: "/go2rtc/webrtc.html?src=front-door"
     output_dir: "/data/front-door"
     interval: 30
 

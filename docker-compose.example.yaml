@@ -1,0 +1,41 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "4433:4433"
+    restart: unless-stopped
+    environment:
+      - SERVER_NAME=timelapse.yfycloud.site
+      - LISTEN_PORT=4433
+      - TIMELAPSE_UPSTREAM=http://timelapse:8080
+      - GO2RTC_UPSTREAM=http://go2rtc:1984
+      # If TLS is terminated in this nginx container, mount certs and set:
+      # - SSL_CERT=/certs/fullchain.pem
+      # - SSL_CERT_KEY=/certs/privkey.pem
+    depends_on:
+      - timelapse
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  timelapse:
+    build: .
+    expose:
+      - "8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/data
+      - ./fonts:/app/fonts:ro
+    restart: unless-stopped
+    environment:
+      - CONFIG_PATH=/app/config.yaml
+      - TZ=Asia/Shanghai
+
+  # Optional: remove this service if go2rtc runs on another machine, then set
+  # GO2RTC_UPSTREAM to its reachable HTTP URL, for example http://host.docker.internal:1984.
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    expose:
+      - "1984"
+    restart: unless-stopped
