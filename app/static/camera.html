@@ -325,9 +325,8 @@ async function loadSnapshots() {
 }
 
 function syncDefaultDate() {
-  const dates = availableDates();
-  if (!selectedDate || !dates.includes(selectedDate)) {
-    selectedDate = dates[dates.length - 1] || dateKey(new Date());
+  if (!selectedDate) {
+    selectedDate = dateKey(new Date());
   }
   calendarMonth = selectedDate.slice(0, 7);
 }

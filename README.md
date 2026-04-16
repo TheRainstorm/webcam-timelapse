@@ -159,6 +159,14 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 docker compose -f docker-compose.dev.yaml up -d --build
 ```
 
+开发 compose 默认设置：
+
+```yaml
+SCHEDULER_ENABLED=false
+```
+
+这样开发服务只启动 Web/API，不会自动抓帧、合成视频或清理快照。适合把生产数据目录以只读方式挂载进开发容器，用于查看已有数据而不影响正在运行的生产服务。
+
 ### Local Python
 
 本地运行需要 Python 3.11+，并且系统里需要可执行的 `ffmpeg`。
@@ -175,6 +183,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 ```bash
 CONFIG_PATH=/path/to/config.yaml uvicorn app.main:app --host 0.0.0.0 --port 8080
+```
+
+如果只想启动 Web/API，不启动后台定时任务，可以设置：
+
+```bash
+SCHEDULER_ENABLED=false uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
 ## Configuration

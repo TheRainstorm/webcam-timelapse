@@ -31,6 +31,8 @@ services:
     environment:
       - CONFIG_PATH=/app/config.yaml
       - TZ=Asia/Shanghai
+      # Set to false when using this service only to view existing data.
+      - SCHEDULER_ENABLED=false
 
   # Optional: remove this service if go2rtc runs on another machine, then set
   # GO2RTC_UPSTREAM to its reachable HTTP URL, for example http://host.docker.internal:1984.

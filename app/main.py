@@ -18,6 +18,12 @@ logging.basicConfig(
 )
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "config.yaml")
+SCHEDULER_ENABLED = os.environ.get("SCHEDULER_ENABLED", "true").lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 
 @asynccontextmanager
@@ -25,13 +31,18 @@ async def lifespan(app: FastAPI):
     global_cfg, cameras = load_config(CONFIG_PATH)
     init_router(cameras)
 
-    scheduler = build_scheduler(cameras)
-    scheduler.start()
-    logging.info("调度器已启动，摄像头数量: %d", len(cameras))
+    scheduler = None
+    if SCHEDULER_ENABLED:
+        scheduler = build_scheduler(cameras)
+        scheduler.start()
+        logging.info("调度器已启动，摄像头数量: %d", len(cameras))
+    else:
+        logging.info("调度器已禁用，摄像头数量: %d", len(cameras))
 
     yield
 
-    scheduler.shutdown()
+    if scheduler is not None:
+        scheduler.shutdown()
 
 
 app = FastAPI(title="Webcam Timelapse", lifespan=lifespan)
