@@ -131,10 +131,7 @@ cameras:
 
 ```
 webcam-timelapse/
-├── config.yaml              # 用户配置
-├── config.example.yaml      # 配置示例
 ├── Dockerfile
-├── docker-compose.yml
 ├── requirements.txt
 ├── app/
 │   ├── main.py              # FastAPI 入口
@@ -151,6 +148,15 @@ webcam-timelapse/
 │       ├── camera.html
 │       ├── style.css
 │       └── app.js
+├── deploy/
+│   ├── config.yaml           # 配置示例
+│   ├── compose.yaml          # 发布镜像部署
+│   ├── compose.dev.yaml      # 本地 build 开发
+│   └── compose.lan.yaml      # LAN 示例
+├── docs/
+│   ├── idea.md
+│   ├── project.md
+│   └── todo.md
 └── fonts/
     └── NotoSansMono-Regular.ttf  # 默认水印字体
 ```
@@ -160,16 +166,16 @@ webcam-timelapse/
 ## Docker 部署
 
 ```yaml
-# docker-compose.yml
+# deploy/compose.lan.yaml
 services:
   timelapse:
-    build: .
+    build: ..
     ports:
       - "8080:8080"
     volumes:
-      - ./config.yaml:/app/config.yaml
-      - ./data:/data
-      - ./fonts:/app/fonts
+      - ../config.yaml:/app/config.yaml
+      - ../data:/data
+      - ../fonts:/app/fonts
     restart: unless-stopped
 ```
 

@@ -1,7 +1,9 @@
+name: webcam-timelapse-dev
+
 services:
   nginx:
     build:
-      context: .
+      context: ..
       dockerfile: docker/nginx/Dockerfile
     ports:
       - "4433:4433"
@@ -20,13 +22,13 @@ services:
       - "host.docker.internal:host-gateway"
 
   timelapse:
-    build: .
+    build: ..
     expose:
       - "8080"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./data:/data
-      - ./fonts:/app/fonts:ro
+      - ../config.yaml:/app/config.yaml:ro
+      - ../data:/data
+      - ../fonts:/app/fonts:ro
     restart: unless-stopped
     environment:
       - CONFIG_PATH=/app/config.yaml

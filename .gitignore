@@ -1,5 +1,5 @@
-config.yaml
-docker-compose.yaml
+/config.yaml
+/docker-compose.yaml
 
 .codex
 tmp/

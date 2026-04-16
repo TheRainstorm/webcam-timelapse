@@ -22,7 +22,7 @@
 1. 复制并编辑配置：
 
 ```bash
-cp config.example.yaml config.yaml
+cp deploy/config.yaml config.yaml
 ```
 
 2. 修改 `config.yaml` 里的摄像头地址和输出目录。Docker Compose 默认把宿主机的 `./data` 挂载到容器内 `/data`，所以摄像头的 `output_dir` 建议使用 `/data/<camera-name>`：
@@ -38,8 +38,7 @@ cameras:
 3. 启动服务：
 
 ```bash
-cp docker-compose.example.yaml docker-compose.yaml
-docker compose up -d
+docker compose -f deploy/compose.yaml up -d
 ```
 
 4. 打开 Web 界面：
@@ -51,12 +50,12 @@ http://localhost:4433
 5. 查看日志：
 
 ```bash
-docker compose logs -f timelapse
+docker compose -f deploy/compose.yaml logs -f timelapse
 ```
 
 ### Docker Nginx Reverse Proxy
 
-`docker-compose.example.yaml` 使用发布镜像，包含一个 `nginx` 服务。容器启动时会根据环境变量生成 Nginx 配置：
+`deploy/compose.yaml` 使用发布镜像，包含一个 `nginx` 服务。容器启动时会根据环境变量生成 Nginx 配置：
 
 - `/` 反代到 timelapse Web。
 - `/go2rtc/` 反代到 go2rtc WebRTC 服务，并自动去掉 `/go2rtc/` 前缀。
@@ -153,10 +152,10 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 ```
 
-本地开发使用 `docker-compose.dev.yaml`，它会从当前代码 build 镜像：
+本地开发使用 `deploy/compose.dev.yaml`，它会从当前代码 build 镜像：
 
 ```bash
-docker compose -f docker-compose.dev.yaml up -d --build
+docker compose -f deploy/compose.dev.yaml up -d --build
 ```
 
 开发 compose 默认设置：
@@ -175,7 +174,7 @@ SCHEDULER_ENABLED=false
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp config.example.yaml config.yaml
+cp deploy/config.yaml config.yaml
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
@@ -278,10 +277,18 @@ curl -X POST "http://localhost:8080/api/cameras/Front%20Door/compose?target_date
 │   ├── scheduler.py       # APScheduler 定时任务
 │   ├── watermark.py       # 水印处理
 │   └── static/            # Web 静态页面
-├── config.example.yaml
-├── docker-compose.example.yaml
-├── docker-compose.dev.yaml
+├── deploy/
+│   ├── config.yaml           # 配置示例
+│   ├── compose.yaml          # 发布镜像部署
+│   ├── compose.dev.yaml      # 本地 build 开发
+│   └── compose.lan.yaml      # 仅应用服务的 LAN 示例
+├── docs/
+│   ├── idea.md
+│   ├── project.md
+│   └── todo.md
 ├── Dockerfile
 ├── fonts/
 └── requirements.txt
 ```
+
+本机私有的 `config.yaml`、`docker-compose.yaml` 和运行数据目录不纳入 git 管理。

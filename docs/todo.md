@@ -8,7 +8,7 @@
 
 ## 已完成
 
-- [x] 项目初始化：目录结构、requirements.txt、config.example.yaml
+- [x] 项目初始化：目录结构、requirements.txt、deploy/config.yaml
 - [x] config.py：配置加载、层级合并（全局 + 摄像头级）
 - [x] capture.py：异步抓帧、保存 JPEG
 - [x] watermark.py：Pillow 水印叠加
@@ -18,7 +18,7 @@
 - [x] api/routes.py：RESTful API
 - [x] 前端：主页摄像头卡片
 - [x] 前端：摄像头详情页（快照浏览 + 视频列表）
-- [x] Dockerfile + docker-compose.yml
+- [x] Dockerfile + deploy/compose.yaml
 - [x] 集成测试：端到端验证（config/watermark/cleaner/composer/API/server 全部通过）
 
 ## 问题记录
