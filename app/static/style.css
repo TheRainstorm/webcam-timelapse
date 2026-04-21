@@ -329,6 +329,17 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   gap: 12px;
   flex-wrap: wrap;
 }
+.range-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.range-summary {
+  color: var(--text-muted);
+  font-size: 12px;
+}
 
 .snap-grid {
   display: grid;
@@ -370,6 +381,15 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   gap: 10px;
   color: var(--text-muted);
   font-size: 12px;
+}
+.pager-input {
+  width: 64px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  padding: 0 8px;
 }
 .btn:disabled {
   opacity: .45;

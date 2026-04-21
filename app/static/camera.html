@@ -25,7 +25,8 @@
         <div class="preview-actions">
           <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
           <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
-          <button class="btn" id="btnCompose" onclick="triggerCompose()">合成选中日期视频</button>
+          <button class="btn" id="btnCompose" onclick="triggerComposeDay()">合成选中日期视频</button>
+          <button class="btn" id="btnComposeRange" onclick="triggerComposeRange()">合成选中区间视频</button>
           <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
         </div>
         <div class="compose-settings">
@@ -103,6 +104,13 @@
           <div class="day-summary" id="daySummary">选择日期查看快照和视频</div>
           <button class="btn" id="btnSnapSort" type="button" onclick="toggleSnapSort()">快照：新到旧</button>
         </div>
+        <div class="range-toolbar">
+          <button class="btn" type="button" onclick="setRangeBoundary('start')">设为开始</button>
+          <button class="btn" type="button" onclick="setRangeBoundary('end')">设为结束</button>
+          <button class="btn" type="button" onclick="useSelectedWeekRange()">选中周</button>
+          <button class="btn" type="button" onclick="useSelectedMonthRange()">选中月</button>
+          <div class="range-summary" id="rangeSummary">区间：未设置</div>
+        </div>
         <div class="snap-grid" id="snapGrid"><div class="empty">选择日期查看快照</div></div>
         <div class="pager" id="snapPager"></div>
       </div>
@@ -136,6 +144,8 @@ let snapPage = 1;
 let snapSort = 'desc';
 const snapsPerPage = 24;
 let snapshotInterval = 60;
+let rangeStartDate = '';
+let rangeEndDate = '';
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let streamPlaying = false;
@@ -206,19 +216,80 @@ function dateKey(date) {
   ].join('-');
 }
 
+function dateFromIso(value) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addDays(value, days) {
+  const next = dateFromIso(value);
+  next.setDate(next.getDate() + days);
+  return dateKey(next);
+}
+
+function expandDateRange(startDate, endDate) {
+  if (!startDate || !endDate) return [];
+  const dates = [];
+  let current = startDate;
+  while (current <= endDate) {
+    dates.push(current);
+    current = addDays(current, 1);
+  }
+  return dates;
+}
+
+function weekRange(dateStr) {
+  const current = dateFromIso(dateStr);
+  const weekday = (current.getDay() + 6) % 7;
+  current.setDate(current.getDate() - weekday);
+  const start = dateKey(current);
+  current.setDate(current.getDate() + 6);
+  return [start, dateKey(current)];
+}
+
+function monthRange(dateStr) {
+  const current = dateFromIso(dateStr);
+  const start = `${dateStr.slice(0, 7)}-01`;
+  const end = dateKey(new Date(current.getFullYear(), current.getMonth() + 1, 0));
+  return [start, end];
+}
+
+function normalizedRange() {
+  if (!rangeStartDate || !rangeEndDate) return null;
+  return rangeStartDate <= rangeEndDate
+    ? [rangeStartDate, rangeEndDate]
+    : [rangeEndDate, rangeStartDate];
+}
+
+function updateRangeSummary() {
+  const el = document.getElementById('rangeSummary');
+  const range = normalizedRange();
+  if (!range) {
+    el.textContent = '区间：未设置';
+    return;
+  }
+  const [start, end] = range;
+  let frameCount = 0;
+  expandDateRange(start, end).forEach(date => {
+    frameCount += (snapData[date] || []).length;
+  });
+  el.textContent = `区间：${start} ~ ${end} · ${frameCount} 张快照`;
+}
+
 function hasSnapshot(date) {
   return (snapData[date] || []).length > 0;
 }
 
 function hasVideo(date) {
-  return videoData.some(v => v.date === date);
+  return videoData.some(v => v.start_date <= date && date <= v.end_date);
 }
 
 function availableDates() {
-  return Array.from(new Set([
-    ...Object.keys(snapData),
-    ...videoData.map(v => v.date)
-  ])).sort();
+  const dates = new Set(Object.keys(snapData));
+  videoData.forEach(video => {
+    expandDateRange(video.start_date, video.end_date).forEach(date => dates.add(date));
+  });
+  return Array.from(dates).sort();
 }
 
 function availableYears() {
@@ -340,6 +411,7 @@ function selectDate(d) {
 
 function renderCurrentDay() {
   renderCalendar();
+  updateRangeSummary();
   renderSnapshots();
   renderVideos();
   updateComposeEstimate();
@@ -351,7 +423,7 @@ function renderSnapshots() {
   );
   const grid = document.getElementById('snapGrid');
   const pager = document.getElementById('snapPager');
-  const videos = videoData.filter(v => v.date === selectedDate);
+  const videos = videoData.filter(v => v.start_date <= selectedDate && selectedDate <= v.end_date);
   document.getElementById('daySummary').textContent =
     `${selectedDate} · ${frames.length} 张快照 · ${videos.length} 个视频`;
   document.getElementById('btnSnapSort').textContent =
@@ -376,7 +448,10 @@ function renderSnapshots() {
 
   pager.innerHTML = `
     <button class="btn" onclick="changeSnapPage(-1)" ${snapPage === 1 ? 'disabled' : ''}>上一页</button>
-    <span>${snapPage} / ${totalPages}</span>
+    <span>第</span>
+    <input class="pager-input" id="snapPageInput" type="number" min="1" max="${totalPages}" value="${snapPage}" onkeydown="handleSnapPageInput(event, ${totalPages})">
+    <span>/ ${totalPages} 页</span>
+    <button class="btn" type="button" onclick="jumpToSnapPage(${totalPages})">跳转</button>
     <button class="btn" onclick="changeSnapPage(1)" ${snapPage === totalPages ? 'disabled' : ''}>下一页</button>
   `;
 }
@@ -384,6 +459,19 @@ function renderSnapshots() {
 function changeSnapPage(delta) {
   snapPage += delta;
   renderSnapshots();
+}
+
+function jumpToSnapPage(totalPages) {
+  const value = document.getElementById('snapPageInput')?.value;
+  snapPage = clampNumber(value, 1, totalPages, snapPage);
+  renderSnapshots();
+}
+
+function handleSnapPageInput(event, totalPages) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    jumpToSnapPage(totalPages);
+  }
 }
 
 function toggleSnapSort() {
@@ -403,16 +491,33 @@ async function loadVideos() {
 
 function renderVideos() {
   const list = document.getElementById('videoList');
-  const videos = videoData.filter(v => v.date === selectedDate).sort((a, b) => b.date.localeCompare(a.date));
-  if (!videos.length) { list.innerHTML = '<div class="empty">这一天暂无延时视频</div>'; return; }
+  const scopeOrder = { day: 0, range: 1, week: 2, month: 3 };
+  const videos = videoData
+    .filter(v => v.start_date <= selectedDate && selectedDate <= v.end_date)
+    .sort((a, b) =>
+      b.end_date.localeCompare(a.end_date)
+      || a.start_date.localeCompare(b.start_date)
+      || (scopeOrder[a.scope] ?? 99) - (scopeOrder[b.scope] ?? 99)
+    );
+  if (!videos.length) { list.innerHTML = '<div class="empty">这一天及所属区间暂无延时视频</div>'; return; }
   list.innerHTML = videos.map(v => `
-    <div class="video-item" id="vi-${v.date}">
-      <span class="video-date">${v.date}</span>
+    <div class="video-item" id="vi-${escapeAttr(v.id)}">
+      <span class="video-date">${escapeAttr(v.label || v.date)}</span>
+      <span class="tag">${escapeAttr(videoScopeLabel(v.scope))}</span>
       <span class="video-size">${(v.size/1024/1024).toFixed(1)} MB</span>
       <button class="btn" data-filename="${escapeAttr(v.filename)}" onclick="playVideo(this.dataset.filename)">▶ 播放</button>
       <a class="btn" href="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(v.filename)}" download>↓</a>
-      <button class="btn btn-danger" onclick="deleteVideo('${v.date}', this)">删除</button>
+      <button class="btn btn-danger" onclick="deleteVideo('${escapeAttr(v.id)}')">删除</button>
     </div>`).join('');
+}
+
+function videoScopeLabel(scope) {
+  return ({
+    day: '当天',
+    range: '区间',
+    week: '周',
+    month: '月'
+  })[scope] || scope;
 }
 
 async function loadStream() {
@@ -529,7 +634,16 @@ function updateComposeEstimate() {
   const el = document.getElementById('composeEstimate');
   if (!el) return;
 
-  const sourceCount = (snapData[selectedDate] || []).length;
+  const range = normalizedRange();
+  let sourceCount = (snapData[selectedDate] || []).length;
+  let rangeLabel = `当天 ${selectedDate || '未选择'}`;
+  if (range) {
+    sourceCount = 0;
+    expandDateRange(range[0], range[1]).forEach(date => {
+      sourceCount += (snapData[date] || []).length;
+    });
+    rangeLabel = `区间 ${range[0]} ~ ${range[1]}`;
+  }
   const fps = composeFps();
   const factor = composeFactor();
   const speed = composeSpeed();
@@ -540,6 +654,7 @@ function updateComposeEstimate() {
   const size = clampNumber(document.getElementById('composeWatermarkSize').value, 8, 96, 24);
 
   el.textContent = [
+    rangeLabel,
     `原始 ${sourceCount} 张`,
     `输出 ${outputFrames} 帧`,
     `预计 ${formatDuration(duration)}`,
@@ -564,17 +679,17 @@ function bindComposeEstimateInputs() {
 function composeQueryParams(targetDate) {
   const watermarkEnabled = document.getElementById('composeWatermark').checked;
   const params = new URLSearchParams({
-    target_date: targetDate,
     video_fps: String(composeFps()),
     speed_multiplier: String(composeSpeed()),
     watermark_enabled: String(watermarkEnabled),
     watermark_position: document.getElementById('composeWatermarkPosition').value,
     watermark_size: String(clampNumber(document.getElementById('composeWatermarkSize').value, 8, 96, 24))
   });
+  if (targetDate) params.set('target_date', targetDate);
   return params.toString();
 }
 
-async function triggerCompose() {
+async function triggerComposeDay() {
   const btn = document.getElementById('btnCompose');
   const frames = snapData[selectedDate] || [];
   if (!frames.length) {
@@ -585,10 +700,46 @@ async function triggerCompose() {
 
   btn.disabled = true;
   btn.textContent = `合成 ${selectedDate}...`;
-  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${composeQueryParams(selectedDate)}`, { method: 'POST' });
+  const params = new URLSearchParams(composeQueryParams(selectedDate));
+  params.set('period', 'day');
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${params.toString()}`, { method: 'POST' });
   btn.textContent = res.ok ? '✓ 已覆盖' : '失败';
   setTimeout(() => {
     btn.textContent = '合成选中日期视频';
+    btn.disabled = false;
+    loadVideos();
+  }, 2000);
+}
+
+async function triggerComposeRange() {
+  const btn = document.getElementById('btnComposeRange');
+  const range = normalizedRange();
+  if (!range) {
+    btn.textContent = '先设区间';
+    setTimeout(() => { btn.textContent = '合成选中区间视频'; }, 1500);
+    return;
+  }
+
+  let frameCount = 0;
+  expandDateRange(range[0], range[1]).forEach(date => {
+    frameCount += (snapData[date] || []).length;
+  });
+  if (!frameCount) {
+    btn.textContent = '区间无快照';
+    setTimeout(() => { btn.textContent = '合成选中区间视频'; }, 1500);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = `合成 ${range[0]} ~ ${range[1]}...`;
+  const params = new URLSearchParams(composeQueryParams(''));
+  params.set('period', 'range');
+  params.set('start_date', range[0]);
+  params.set('end_date', range[1]);
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${params.toString()}`, { method: 'POST' });
+  btn.textContent = res.ok ? '✓ 已覆盖' : '失败';
+  setTimeout(() => {
+    btn.textContent = '合成选中区间视频';
     btn.disabled = false;
     loadVideos();
   }, 2000);
@@ -607,7 +758,9 @@ async function triggerComposeAll() {
   let okCount = 0;
   for (let i = 0; i < dates.length; i++) {
     btn.textContent = `合成 ${i + 1}/${dates.length}`;
-    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${composeQueryParams(dates[i])}`, { method: 'POST' });
+    const params = new URLSearchParams(composeQueryParams(dates[i]));
+    params.set('period', 'day');
+    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${params.toString()}`, { method: 'POST' });
     if (res.ok) okCount++;
   }
 
@@ -619,10 +772,37 @@ async function triggerComposeAll() {
   }, 2000);
 }
 
-async function deleteVideo(date, btn) {
-  if (!confirm(`确认删除 ${date} 的视频？`)) return;
-  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos/${date}`, { method: 'DELETE' });
-  if (res.ok) { document.getElementById(`vi-${date}`)?.remove(); loadVideos(); }
+async function deleteVideo(videoId) {
+  if (!confirm(`确认删除 ${videoId} 的视频？`)) return;
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(videoId)}`, { method: 'DELETE' });
+  if (res.ok) { loadVideos(); }
+}
+
+function setRangeBoundary(type) {
+  if (!selectedDate) return;
+  if (type === 'start') rangeStartDate = selectedDate;
+  if (type === 'end') rangeEndDate = selectedDate;
+  if (!rangeStartDate) rangeStartDate = selectedDate;
+  if (!rangeEndDate) rangeEndDate = selectedDate;
+  updateRangeSummary();
+  updateComposeEstimate();
+  renderVideos();
+}
+
+function useSelectedWeekRange() {
+  if (!selectedDate) return;
+  [rangeStartDate, rangeEndDate] = weekRange(selectedDate);
+  updateRangeSummary();
+  updateComposeEstimate();
+  renderVideos();
+}
+
+function useSelectedMonthRange() {
+  if (!selectedDate) return;
+  [rangeStartDate, rangeEndDate] = monthRange(selectedDate);
+  updateRangeSummary();
+  updateComposeEstimate();
+  renderVideos();
 }
 
 document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });

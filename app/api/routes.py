@@ -1,7 +1,6 @@
 """RESTful API 路由"""
 from __future__ import annotations
 import asyncio
-import os
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -11,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.capture import capture_snapshot
-from app.composer import ComposeOptions, compose_video
+from app.composer import ComposeOptions, compose_video, period_bounds
 from app.config import CameraConfig
 
 router = APIRouter(prefix="/api")
@@ -83,22 +82,74 @@ async def list_videos(name: str) -> dict[str, Any]:
     videos = []
     if video_dir.exists():
         for v in sorted(video_dir.glob("*.mp4")):
+            scope = "day"
+            anchor_date: date | None = None
+            label = v.stem
+            if v.stem.startswith("week-"):
+                scope = "week"
+                try:
+                    _, iso_year, iso_week = v.stem.split("-", 2)
+                    anchor_date = date.fromisocalendar(int(iso_year), int(iso_week.removeprefix("W")), 1)
+                    label = f"{iso_year} 第 {int(iso_week.removeprefix('W'))} 周"
+                except ValueError:
+                    anchor_date = None
+            elif v.stem.startswith("month-"):
+                scope = "month"
+                try:
+                    anchor_date = date.fromisoformat(f"{v.stem.removeprefix('month-')}-01")
+                    label = anchor_date.strftime("%Y-%m")
+                except ValueError:
+                    anchor_date = None
+            elif v.stem.startswith("range-"):
+                scope = "range"
+                try:
+                    start_raw, end_raw = v.stem.removeprefix("range-").split("_", 1)
+                    start_date = date.fromisoformat(start_raw)
+                    end_date = date.fromisoformat(end_raw)
+                    anchor_date = start_date
+                    start_date_str = start_date.isoformat()
+                    end_date_str = end_date.isoformat()
+                    label = f"{start_date_str} ~ {end_date_str}"
+                except ValueError:
+                    anchor_date = None
+            else:
+                try:
+                    anchor_date = date.fromisoformat(v.stem)
+                    label = anchor_date.isoformat()
+                except ValueError:
+                    anchor_date = None
+
+            if scope == "range" and anchor_date is not None:
+                pass
+            elif anchor_date is not None:
+                start_date, end_date = period_bounds(anchor_date, scope)
+                start_date_str = start_date.isoformat()
+                end_date_str = end_date.isoformat()
+            else:
+                start_date_str = v.stem
+                end_date_str = v.stem
+
             videos.append({
+                "id": v.stem,
                 "date": v.stem,
                 "filename": v.name,
                 "size": v.stat().st_size,
+                "scope": scope,
+                "label": label,
+                "start_date": start_date_str,
+                "end_date": end_date_str,
             })
     return {"camera": name, "videos": videos}
 
 
-@router.delete("/cameras/{name}/videos/{video_date}")
-async def delete_video(name: str, video_date: str) -> dict[str, str]:
+@router.delete("/cameras/{name}/videos/{video_id}")
+async def delete_video(name: str, video_id: str) -> dict[str, str]:
     cam = _get_cam(name)
-    video_path = Path(cam.output_dir) / "videos" / f"{video_date}.mp4"
+    video_path = Path(cam.output_dir) / "videos" / f"{video_id}.mp4"
     if not video_path.exists():
         raise HTTPException(404, "Video not found")
     video_path.unlink()
-    return {"status": "deleted", "date": video_date}
+    return {"status": "deleted", "id": video_id}
 
 
 @router.post("/cameras/{name}/trigger")
@@ -114,6 +165,9 @@ async def trigger_capture(name: str) -> dict[str, Any]:
 async def trigger_compose(
     name: str,
     target_date: str | None = None,
+    period: str = "day",
+    start_date: str | None = None,
+    end_date: str | None = None,
     video_fps: int | None = None,
     speed_multiplier: float | None = None,
     watermark_enabled: bool | None = None,
@@ -122,6 +176,12 @@ async def trigger_compose(
 ) -> dict[str, Any]:
     cam = _get_cam(name)
     d = date.fromisoformat(target_date) if target_date else None
+    range_start = date.fromisoformat(start_date) if start_date else None
+    range_end = date.fromisoformat(end_date) if end_date else None
+    if period not in {"day", "week", "month", "range"}:
+        raise HTTPException(400, "period must be one of: day, week, month, range")
+    if period == "range" and (range_start is None or range_end is None):
+        raise HTTPException(400, "start_date and end_date are required for period=range")
     if video_fps is not None and not 1 <= video_fps <= 240:
         raise HTTPException(400, "video_fps must be between 1 and 240")
     if speed_multiplier is not None and not 1 <= speed_multiplier <= 100000:
@@ -153,10 +213,13 @@ async def trigger_compose(
         watermark=watermark,
     )
     loop = asyncio.get_event_loop()
-    path = await loop.run_in_executor(None, partial(compose_video, cam, d, options))
+    path = await loop.run_in_executor(
+        None,
+        partial(compose_video, cam, d, options, period, range_start, range_end),
+    )
     if path is None:
         raise HTTPException(500, "Compose failed")
-    return {"status": "ok", "path": str(path)}
+    return {"status": "ok", "path": str(path), "period": period}
 
 
 @router.get("/cameras/{name}/snapshots/{snap_date}/{filename}")
