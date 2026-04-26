@@ -252,13 +252,20 @@ cameras:
 - `video_time`: 每日合成任务触发时间，格式为 `HH:MM`，默认合成前一天。
 - `watermark.font`: 水印字体路径；Docker Compose 会把 `./fonts` 挂载到 `/app/fonts`。
 
-使用 VAAPI 时，在 compose 文件里把 `extends.service` 改成 `vaapi`。对应配置定义在 `deploy/hwaccel.transcoding.yml`，会把宿主机的 `/dev/dri` 暴露给 `timelapse` 容器。容器内还需要 `ffmpeg` 能看到 `h264_vaapi` / `hevc_vaapi` 编码器。
+使用 VAAPI 时，在 compose 文件里把 `extends.service` 改成 `vaapi`。对应配置定义在 `deploy/hwaccel.transcoding.yml`，会把宿主机的 `/dev/dri` 暴露给 `timelapse` 容器。镜像内已包含 `libva2`、`mesa-va-drivers`、`vainfo`，用于 AMD `radeonsi` VAAPI 编码。
 
 ```yaml
 services:
   timelapse:
     devices:
       - /dev/dri:/dev/dri
+```
+
+重建镜像后，可以在容器里验证：
+
+```bash
+docker compose exec timelapse vainfo --display drm --device /dev/dri/renderD128 | grep -i 264
+docker compose exec timelapse ffmpeg -hide_banner -encoders | grep vaapi
 ```
 
 `h264_nvenc` 使用时，把 `extends.service` 改成 `nvenc`。对应配置也定义在 `deploy/hwaccel.transcoding.yml`，会为 `timelapse` 增加 NVIDIA GPU 预留和环境变量。前提仍然是宿主机已安装 NVIDIA Container Toolkit，并且 Docker 已配置好 NVIDIA runtime。
