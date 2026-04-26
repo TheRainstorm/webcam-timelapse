@@ -162,6 +162,10 @@ let rangeEndDate = '';
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let streamPlaying = false;
+let modalType = '';
+let modalSnapDate = '';
+let modalSnapFrames = [];
+let modalSnapIndex = -1;
 
 function escapeAttr(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -430,10 +434,14 @@ function renderCurrentDay() {
   updateComposeEstimate();
 }
 
-function renderSnapshots() {
-  const frames = [...(snapData[selectedDate] || [])].sort((a, b) =>
+function currentSortedFrames(date) {
+  return [...(snapData[date] || [])].sort((a, b) =>
     snapSort === 'desc' ? b.localeCompare(a) : a.localeCompare(b)
   );
+}
+
+function renderSnapshots() {
+  const frames = currentSortedFrames(selectedDate);
   const grid = document.getElementById('snapGrid');
   const pager = document.getElementById('snapPager');
   const videos = videoData.filter(v => v.start_date <= selectedDate && selectedDate <= v.end_date);
@@ -575,19 +583,53 @@ function toggleStream() {
   }
 }
 
-function viewSnap(date, file) {
+function renderModalSnap() {
+  const file = modalSnapFrames[modalSnapIndex];
+  if (!file || !modalSnapDate) return;
+  const navHint = modalSnapFrames.length > 1
+    ? `<div class="modal-hint">← 上一张 · 下一张 →</div>`
+    : '';
   document.getElementById('modalContent').innerHTML =
-    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${encodeURIComponent(date)}/${encodeURIComponent(file)}" style="max-width:80vw;max-height:75vh">`;
+    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${encodeURIComponent(modalSnapDate)}/${encodeURIComponent(file)}" style="max-width:80vw;max-height:75vh"><div class="modal-caption">${escapeAttr(modalSnapDate)} ${escapeAttr(snapshotTime(file))}</div>${navHint}`;
+}
+
+function viewSnap(date, file) {
+  modalType = 'snapshot';
+  modalSnapDate = date;
+  modalSnapFrames = currentSortedFrames(date);
+  modalSnapIndex = modalSnapFrames.indexOf(file);
+  if (modalSnapIndex < 0) {
+    modalSnapFrames = [file];
+    modalSnapIndex = 0;
+  }
+  renderModalSnap();
   document.getElementById('modal').classList.add('open');
 }
 
 function playVideo(filename) {
+  modalType = 'video';
+  modalSnapDate = '';
+  modalSnapFrames = [];
+  modalSnapIndex = -1;
   document.getElementById('modalContent').innerHTML =
     `<video src="/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(filename)}" controls playsinline preload="metadata" style="max-width:80vw;max-height:70vh"></video>`;
   document.getElementById('modal').classList.add('open');
 }
 
+function stepModalSnap(delta) {
+  if (modalType !== 'snapshot' || modalSnapFrames.length <= 1) return;
+  modalSnapIndex = Math.min(
+    modalSnapFrames.length - 1,
+    Math.max(0, modalSnapIndex + delta),
+  );
+  renderModalSnap();
+}
+
 function closeModal() {
+  modalType = '';
+  modalSnapDate = '';
+  modalSnapFrames = [];
+  modalSnapIndex = -1;
   document.getElementById('modal').classList.remove('open');
   document.getElementById('modalContent').innerHTML = '';
 }
@@ -831,6 +873,24 @@ function useSelectedMonthRange() {
 }
 
 document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('modal').classList.contains('open')) return;
+  const tag = e.target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeModal();
+    return;
+  }
+  if (modalType !== 'snapshot') return;
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    stepModalSnap(-1);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    stepModalSnap(1);
+  }
+});
 
 loadStream();
 loadSnapshots();
