@@ -1,10 +1,16 @@
 """配置加载与层级合并"""
 from __future__ import annotations
 import re
-from pathlib import Path
 from typing import Optional
 import yaml
 from pydantic import BaseModel, field_validator
+
+SUPPORTED_VIDEO_ENCODERS = {
+    "libx264",
+    "h264_vaapi",
+    "hevc_vaapi",
+    "h264_nvenc",
+}
 
 
 class WatermarkConfig(BaseModel):
@@ -26,6 +32,9 @@ class CameraConfig(BaseModel):
     retention_days: int = 30
     video_fps: int = 60
     video_speed_factor: float = 1.0
+    video_encoder: str = "libx264"
+    video_quality: int = 23
+    vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
 
@@ -36,14 +45,45 @@ class CameraConfig(BaseModel):
             raise ValueError("video_time must be HH:MM format")
         return v
 
+    @field_validator("video_encoder")
+    @classmethod
+    def validate_video_encoder(cls, v: str) -> str:
+        if v not in SUPPORTED_VIDEO_ENCODERS:
+            raise ValueError(f"video_encoder must be one of: {', '.join(sorted(SUPPORTED_VIDEO_ENCODERS))}")
+        return v
+
+    @field_validator("video_quality")
+    @classmethod
+    def validate_video_quality(cls, v: int) -> int:
+        if not 0 <= v <= 51:
+            raise ValueError("video_quality must be between 0 and 51")
+        return v
+
 
 class GlobalConfig(BaseModel):
     interval: int = 30
     retention_days: int = 30
     video_fps: int = 60
     video_speed_factor: float = 1.0
+    video_encoder: str = "libx264"
+    video_quality: int = 23
+    vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
+
+    @field_validator("video_encoder")
+    @classmethod
+    def validate_video_encoder(cls, v: str) -> str:
+        if v not in SUPPORTED_VIDEO_ENCODERS:
+            raise ValueError(f"video_encoder must be one of: {', '.join(sorted(SUPPORTED_VIDEO_ENCODERS))}")
+        return v
+
+    @field_validator("video_quality")
+    @classmethod
+    def validate_video_quality(cls, v: int) -> int:
+        if not 0 <= v <= 51:
+            raise ValueError("video_quality must be between 0 and 51")
+        return v
 
 
 class AppConfig(BaseModel):

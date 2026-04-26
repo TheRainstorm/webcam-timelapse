@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class ComposeOptions:
     video_fps: int | None = None
     speed_multiplier: float | None = None
+    video_encoder: str | None = None
+    video_quality: int | None = None
     watermark: WatermarkConfig | None = None
 
 
@@ -124,6 +126,37 @@ def period_video_stem(anchor_date: date, period: str, start_date: date | None = 
     raise ValueError(f"Unsupported compose period: {period}")
 
 
+def _ffmpeg_video_args(cam: CameraConfig, video_encoder: str, video_quality: int, video_fps: int) -> list[str]:
+    gop_size = max(30, video_fps * 2)
+    if video_encoder == "libx264":
+        return [
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", str(video_quality),
+            "-pix_fmt", "yuv420p",
+            "-g", str(gop_size),
+        ]
+    if video_encoder in {"h264_vaapi", "hevc_vaapi"}:
+        return [
+            "-vaapi_device", cam.vaapi_device,
+            "-vf", "format=nv12,hwupload",
+            "-c:v", video_encoder,
+            "-qp", str(video_quality),
+            "-g", str(gop_size),
+        ]
+    if video_encoder == "h264_nvenc":
+        return [
+            "-c:v", "h264_nvenc",
+            "-preset", "p5",
+            "-rc:v", "vbr",
+            "-cq:v", str(video_quality),
+            "-b:v", "0",
+            "-pix_fmt", "yuv420p",
+            "-g", str(gop_size),
+        ]
+    raise ValueError(f"Unsupported video encoder: {video_encoder}")
+
+
 def compose_video(
     cam: CameraConfig,
     target_date: date | None = None,
@@ -160,6 +193,8 @@ def compose_video(
     output = video_dir / f"{period_video_stem(target_date, period, start_date, end_date)}.mp4"
     video_fps = options.video_fps or cam.video_fps
     speed_multiplier = options.speed_multiplier or cam.interval * video_fps * cam.video_speed_factor
+    video_encoder = options.video_encoder or cam.video_encoder
+    video_quality = options.video_quality if options.video_quality is not None else cam.video_quality
     watermark = options.watermark if options.watermark is not None else cam.watermark
 
     try:
@@ -172,7 +207,7 @@ def compose_video(
                 "ffmpeg", "-y",
                 "-framerate", str(video_fps),
                 "-i", str(temp_dir / "%08d.jpg"),
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                *_ffmpeg_video_args(cam, video_encoder, video_quality, video_fps),
                 "-movflags", "+faststart",
                 str(output),
             ]

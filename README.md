@@ -41,6 +41,20 @@ cameras:
 docker compose -f deploy/compose.yaml up -d
 ```
 
+如果要启用硬件转码相关的容器配置，按 Immich 那种方式，在对应的 compose 文件里取消注释 `timelapse` 服务下的 `extends` 段：
+
+```yaml
+# extends:
+#   file: hwaccel.transcoding.yml
+#   service: cpu # set to one of [cpu, nvenc, vaapi] for accelerated transcoding
+```
+
+然后把 `service` 改成：
+
+- `cpu`: 不启用硬件加速
+- `vaapi`: 挂载 `/dev/dri`
+- `nvenc`: 启用 NVIDIA GPU 预留
+
 4. 打开 Web 界面：
 
 ```text
@@ -158,6 +172,8 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 docker compose -f deploy/compose.dev.yaml up -d --build
 ```
 
+开发版和 LAN 版 compose 也提供了同样的 `extends` 注释块，改法一致。
+
 开发 compose 默认设置：
 
 ```yaml
@@ -200,6 +216,9 @@ global:
   retention_days: 30
   video_fps: 60
   video_speed_factor: 1.0
+  video_encoder: libx264
+  video_quality: 23
+  vaapi_device: /dev/dri/renderD128
   video_time: "00:05"
   watermark:
     enabled: true
@@ -227,8 +246,22 @@ cameras:
 - `retention_days`: 快照保留天数。
 - `video_fps`: 合成视频输出帧率。
 - `video_speed_factor`: 快进系数，实际快进倍数 = `interval * video_fps * video_speed_factor`。
+- `video_encoder`: 合成编码器，支持 `libx264`、`h264_vaapi`、`hevc_vaapi`、`h264_nvenc`。
+- `video_quality`: 合成质量参数，范围 `0-51`，越小质量越高；默认 `23`。
+- `vaapi_device`: VAAPI 设备路径，默认 `/dev/dri/renderD128`。
 - `video_time`: 每日合成任务触发时间，格式为 `HH:MM`，默认合成前一天。
 - `watermark.font`: 水印字体路径；Docker Compose 会把 `./fonts` 挂载到 `/app/fonts`。
+
+使用 VAAPI 时，在 compose 文件里把 `extends.service` 改成 `vaapi`。对应配置定义在 `deploy/hwaccel.transcoding.yml`，会把宿主机的 `/dev/dri` 暴露给 `timelapse` 容器。容器内还需要 `ffmpeg` 能看到 `h264_vaapi` / `hevc_vaapi` 编码器。
+
+```yaml
+services:
+  timelapse:
+    devices:
+      - /dev/dri:/dev/dri
+```
+
+`h264_nvenc` 使用时，把 `extends.service` 改成 `nvenc`。对应配置也定义在 `deploy/hwaccel.transcoding.yml`，会为 `timelapse` 增加 NVIDIA GPU 预留和环境变量。前提仍然是宿主机已安装 NVIDIA Container Toolkit，并且 Docker 已配置好 NVIDIA runtime。
 
 ## Output Layout
 

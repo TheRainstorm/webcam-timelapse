@@ -21,6 +21,9 @@ services:
 
   timelapse:
     image: rzero/webcam-timelapse:latest
+    # extends:
+    #   file: hwaccel.transcoding.yml
+    #   service: cpu # set to one of [cpu, nvenc, vaapi] for accelerated transcoding
     expose:
       - "8080"
     volumes:

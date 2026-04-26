@@ -3,6 +3,9 @@ name: webcam-timelapse-lan
 services:
   timelapse:
     build: ..
+    # extends:
+    #   file: hwaccel.transcoding.yml
+    #   service: cpu # set to one of [cpu, nvenc, vaapi] for accelerated transcoding
     ports:
       - "8080:8080"
     volumes:

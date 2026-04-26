@@ -3,6 +3,9 @@ global:
   retention_days: 30        # 快照保留天数
   video_fps: 60             # 合成视频输出帧率
   video_speed_factor: 1.0   # 快进系数，实际快进倍数 = interval * video_fps * video_speed_factor
+  video_encoder: libx264    # libx264 / h264_vaapi / hevc_vaapi / h264_nvenc
+  video_quality: 23         # 统一质量参数，越小越清晰
+  vaapi_device: /dev/dri/renderD128
   video_time: "00:05"       # 每日合成触发时间
   watermark:
     enabled: true

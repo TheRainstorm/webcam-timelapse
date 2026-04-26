@@ -56,6 +56,8 @@ async def list_cameras() -> list[dict[str, Any]]:
             "interval": cam.interval,
             "video_fps": cam.video_fps,
             "video_speed_factor": cam.video_speed_factor,
+            "video_encoder": cam.video_encoder,
+            "video_quality": cam.video_quality,
             "watermark": cam.watermark.model_dump(),
         })
     return result
@@ -170,6 +172,8 @@ async def trigger_compose(
     end_date: str | None = None,
     video_fps: int | None = None,
     speed_multiplier: float | None = None,
+    video_encoder: str | None = None,
+    video_quality: int | None = None,
     watermark_enabled: bool | None = None,
     watermark_position: str | None = None,
     watermark_size: int | None = None,
@@ -186,6 +190,15 @@ async def trigger_compose(
         raise HTTPException(400, "video_fps must be between 1 and 240")
     if speed_multiplier is not None and not 1 <= speed_multiplier <= 100000:
         raise HTTPException(400, "speed_multiplier must be between 1 and 100000")
+    if video_encoder is not None and video_encoder not in {
+        "libx264",
+        "h264_vaapi",
+        "hevc_vaapi",
+        "h264_nvenc",
+    }:
+        raise HTTPException(400, "video_encoder must be one of: libx264, h264_vaapi, hevc_vaapi, h264_nvenc")
+    if video_quality is not None and not 0 <= video_quality <= 51:
+        raise HTTPException(400, "video_quality must be between 0 and 51")
     if watermark_position is not None and watermark_position not in {
         "top-left",
         "top-right",
@@ -210,6 +223,8 @@ async def trigger_compose(
     options = ComposeOptions(
         video_fps=video_fps,
         speed_multiplier=speed_multiplier,
+        video_encoder=video_encoder,
+        video_quality=video_quality,
         watermark=watermark,
     )
     loop = asyncio.get_event_loop()
