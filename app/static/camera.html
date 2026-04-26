@@ -22,67 +22,86 @@
         <div class="stream-box" id="streamBox">
           <div class="stream-placeholder">无实时流配置</div>
         </div>
-        <div class="preview-actions">
-          <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
-          <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
-          <button class="btn" id="btnCompose" onclick="triggerComposeDay()">合成选中日期视频</button>
-          <button class="btn" id="btnComposeRange" onclick="triggerComposeRange()">合成选中区间视频</button>
-          <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
+        <div class="tool-section">
+          <div class="section-title">预览控制</div>
+          <div class="preview-actions">
+            <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
+            <div class="preview-actions" id="torchActions" style="display:none">
+              <button class="btn" id="btnTorchOn" onclick="toggleTorch('on')">开灯</button>
+              <button class="btn" id="btnTorchOff" onclick="toggleTorch('off')">关灯</button>
+            </div>
+          </div>
         </div>
-        <div class="compose-settings">
-          <label>
-            <span>输出帧率</span>
-            <span class="combo-field">
-              <input id="composeFps" type="text" inputmode="numeric" value="24">
-              <select id="composeFpsPreset" onchange="applyFpsPreset()">
-                <option value="">常见</option>
-                <option value="24">24</option>
-                <option value="30">30</option>
-                <option value="60">60</option>
-                <option value="90">90</option>
-                <option value="120">120</option>
-                <option value="144">144</option>
-                <option value="160">160</option>
-                <option value="165">165</option>
+        <div class="tool-section">
+          <div class="section-title">手动操作</div>
+          <div class="preview-actions">
+            <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
+            <button class="btn" id="btnCompose" onclick="triggerComposeDay()">合成选中日期视频</button>
+            <button class="btn" id="btnComposeRange" onclick="triggerComposeRange()">合成选中区间视频</button>
+            <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
+          </div>
+        </div>
+        <div class="tool-section">
+          <div class="section-title">合成设置</div>
+          <div class="compose-settings">
+            <label>
+              <span>输出帧率</span>
+              <span class="combo-field">
+                <input id="composeFps" type="text" inputmode="numeric" value="24">
+                <select id="composeFpsPreset" onchange="applyFpsPreset()">
+                  <option value="">常见</option>
+                  <option value="24">24</option>
+                  <option value="30">30</option>
+                  <option value="60">60</option>
+                  <option value="90">90</option>
+                  <option value="120">120</option>
+                  <option value="144">144</option>
+                  <option value="160">160</option>
+                  <option value="165">165</option>
+                </select>
+              </span>
+            </label>
+            <label>
+              <span>快进系数</span>
+              <input id="composeFactor" type="number" min="0.1" max="1000" step="0.1" value="1.0">
+            </label>
+            <label>
+              <span>编码器</span>
+              <select id="composeEncoder">
+                <option value="libx264">libx264</option>
+                <option value="h264_vaapi">h264_vaapi</option>
+                <option value="hevc_vaapi">hevc_vaapi</option>
+                <option value="h264_nvenc">h264_nvenc</option>
               </select>
-            </span>
-          </label>
-          <label>
-            <span>快进系数</span>
-            <input id="composeFactor" type="number" min="0.1" max="1000" step="0.1" value="1.0">
-          </label>
-          <label>
-            <span>编码器</span>
-            <select id="composeEncoder">
-              <option value="libx264">libx264</option>
-              <option value="h264_vaapi">h264_vaapi</option>
-              <option value="hevc_vaapi">hevc_vaapi</option>
-              <option value="h264_nvenc">h264_nvenc</option>
-            </select>
-          </label>
-          <label>
-            <span>质量</span>
-            <input id="composeQuality" type="number" min="0" max="51" step="1" value="23">
-          </label>
-          <label class="check-field">
-            <input id="composeWatermark" type="checkbox" checked>
-            <span>合成时添加水印</span>
-          </label>
-          <label>
-            <span>水印位置</span>
-            <select id="composeWatermarkPosition">
-              <option value="top-left">左上角</option>
-              <option value="top-right">右上角</option>
-              <option value="bottom-left">左下角</option>
-              <option value="bottom-right">右下角</option>
-            </select>
-          </label>
-          <label>
-            <span>水印大小</span>
-            <input id="composeWatermarkSize" type="number" min="8" max="96" step="1" value="24">
-          </label>
+            </label>
+            <label>
+              <span>质量</span>
+              <input id="composeQuality" type="number" min="0" max="51" step="1" value="23">
+            </label>
+            <label class="check-field">
+              <input id="composeSkipNight" type="checkbox">
+              <span>合成时跳过黑夜</span>
+            </label>
+            <label class="check-field">
+              <input id="composeWatermark" type="checkbox" checked>
+              <span>合成时添加水印</span>
+            </label>
+            <label>
+              <span>水印位置</span>
+              <select id="composeWatermarkPosition">
+                <option value="top-left">左上角</option>
+                <option value="top-right">右上角</option>
+                <option value="bottom-left">左下角</option>
+                <option value="bottom-right">右下角</option>
+              </select>
+            </label>
+            <label>
+              <span>水印大小</span>
+              <input id="composeWatermarkSize" type="number" min="8" max="96" step="1" value="24">
+            </label>
+          </div>
+          <div class="compose-estimate" id="composeEstimate">选择日期后显示预计视频信息</div>
         </div>
-        <div class="compose-estimate" id="composeEstimate">选择日期后显示预计视频信息</div>
       </div>
 
       <div class="panel">
@@ -91,6 +110,30 @@
           <div class="stat"><div class="val" id="statSnaps">-</div><div class="lbl">总快照</div></div>
           <div class="stat"><div class="val" id="statVideos">-</div><div class="lbl">视频数</div></div>
           <div class="stat"><div class="val" id="statDays">-</div><div class="lbl">记录天数</div></div>
+        </div>
+        <div class="daylight-box">
+          <div class="daylight-head">
+            <div class="section-title">Daylight</div>
+            <div class="daylight-badges" id="daylightBadges">
+              <span class="tag">未配置</span>
+            </div>
+          </div>
+          <div class="daylight-feature-grid">
+            <div class="daylight-feature" id="daylightNightCaptureBox">
+              <span class="daylight-feature-label">夜间抓拍</span>
+              <strong class="daylight-feature-value" id="daylightNightCapture">已启用</strong>
+            </div>
+            <div class="daylight-feature" id="daylightTorchBox">
+              <span class="daylight-feature-label">补光灯</span>
+              <strong class="daylight-feature-value" id="daylightTorch">未配置</strong>
+            </div>
+          </div>
+          <div class="daylight-grid" id="daylightGrid">
+            <div class="daylight-row"><span>日出日落</span><strong id="daylightStatus">未启用</strong></div>
+            <div class="daylight-row"><span>经纬度</span><strong id="daylightLocation">未配置</strong></div>
+            <div class="daylight-row"><span>时区</span><strong id="daylightTimezone">未配置</strong></div>
+            <div class="daylight-row"><span>日出日落</span><strong id="daylightTimes">选择日期后显示</strong></div>
+          </div>
         </div>
       </div>
     </div>
@@ -162,6 +205,8 @@ let rangeEndDate = '';
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let streamPlaying = false;
+let daylightInfo = null;
+let daylightDates = {};
 let modalType = '';
 let modalSnapDate = '';
 let modalSnapFrames = [];
@@ -293,6 +338,82 @@ function updateRangeSummary() {
   el.textContent = `区间：${start} ~ ${end} · ${frameCount} 张快照`;
 }
 
+function currentComposeDates() {
+  const range = normalizedRange();
+  return range ? expandDateRange(range[0], range[1]) : (selectedDate ? [selectedDate] : []);
+}
+
+function daylightWindow(date) {
+  return daylightDates[date] || null;
+}
+
+function daytimeSnapshotCount(dates) {
+  let count = 0;
+  dates.forEach(date => {
+    const window = daylightWindow(date);
+    const frames = snapData[date] || [];
+    if (!window) {
+      count += frames.length;
+      return;
+    }
+    frames.forEach(frame => {
+      const time = snapshotTime(frame);
+      if (window.sunrise_time <= time && time < window.sunset_time) count += 1;
+    });
+  });
+  return count;
+}
+
+function renderDaylightInfo() {
+  const statusEl = document.getElementById('daylightStatus');
+  const locationEl = document.getElementById('daylightLocation');
+  const nightCaptureEl = document.getElementById('daylightNightCapture');
+  const nightCaptureBoxEl = document.getElementById('daylightNightCaptureBox');
+  const torchEl = document.getElementById('daylightTorch');
+  const torchBoxEl = document.getElementById('daylightTorchBox');
+  const timezoneEl = document.getElementById('daylightTimezone');
+  const timesEl = document.getElementById('daylightTimes');
+  const badgesEl = document.getElementById('daylightBadges');
+  if (!daylightInfo?.configured) {
+    statusEl.textContent = '未启用';
+    locationEl.textContent = '未配置';
+    nightCaptureEl.textContent = '已启用';
+    nightCaptureBoxEl.classList.remove('enabled', 'warn');
+    torchEl.textContent = '未配置';
+    torchBoxEl.classList.remove('enabled');
+    timezoneEl.textContent = daylightInfo?.timezone || '未配置';
+    timesEl.textContent = '未配置日出日落规则';
+    badgesEl.innerHTML = '<span class="tag">未配置</span>';
+    return;
+  }
+  statusEl.textContent = daylightInfo.enabled ? '已启用' : '未启用';
+  locationEl.textContent = `${daylightInfo.latitude}, ${daylightInfo.longitude}`;
+  nightCaptureEl.textContent = daylightInfo.disable_night_snapshots ? '已禁用' : '已启用';
+  nightCaptureBoxEl.classList.toggle('enabled', !daylightInfo.disable_night_snapshots);
+  nightCaptureBoxEl.classList.toggle('warn', Boolean(daylightInfo.disable_night_snapshots));
+  torchEl.textContent = daylightInfo.torch_configured ? '已配置' : '未配置';
+  torchBoxEl.classList.toggle('enabled', Boolean(daylightInfo.torch_configured));
+  timezoneEl.textContent = daylightInfo.timezone || '未配置';
+  badgesEl.innerHTML = [
+    `<span class="tag">${daylightInfo.enabled ? '日出日落开' : '日出日落关'}</span>`,
+    `<span class="tag">${daylightInfo.disable_night_snapshots ? '夜间抓拍关' : '夜间抓拍开'}</span>`,
+    daylightInfo.torch_configured ? '<span class="tag">补光灯已配置</span>' : ''
+  ].join('');
+
+  const info = selectedDate ? daylightWindow(selectedDate) : null;
+  if (!info) {
+    timesEl.textContent = '选择日期后显示日出日落时间';
+    return;
+  }
+  timesEl.textContent = `${selectedDate} · 日出 ${info.sunrise_time} · 日落 ${info.sunset_time}`;
+}
+
+async function refreshDaylightInfo() {
+  await loadDaylight();
+  renderDaylightInfo();
+  updateComposeEstimate();
+}
+
 function hasSnapshot(date) {
   return (snapData[date] || []).length > 0;
 }
@@ -380,6 +501,7 @@ function selectMonthDate() {
   selectedDate = dates[dates.length - 1] || `${calendarMonth}-01`;
   snapPage = 1;
   renderCurrentDay();
+  refreshDaylightInfo();
 }
 
 function changeCalendarMonth(delta) {
@@ -409,6 +531,7 @@ async function loadSnapshots() {
   document.getElementById('statDays').textContent = dates.length;
 
   syncDefaultDate();
+  await loadDaylight();
   renderCurrentDay();
 }
 
@@ -424,11 +547,13 @@ function selectDate(d) {
   snapPage = 1;
   calendarMonth = d.slice(0, 7);
   renderCurrentDay();
+  refreshDaylightInfo();
 }
 
 function renderCurrentDay() {
   renderCalendar();
   updateRangeSummary();
+  renderDaylightInfo();
   renderSnapshots();
   renderVideos();
   updateComposeEstimate();
@@ -510,6 +635,18 @@ async function loadVideos() {
   renderCurrentDay();
 }
 
+async function loadDaylight() {
+  if (!selectedDate) return;
+  const dates = currentComposeDates();
+  if (!dates.length) return;
+  const start = dates[0];
+  const end = dates[dates.length - 1];
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/daylight?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`);
+  const data = await res.json();
+  daylightInfo = data;
+  daylightDates = data.dates || {};
+}
+
 function renderVideos() {
   const list = document.getElementById('videoList');
   const scopeOrder = { day: 0, range: 1, week: 2, month: 3 };
@@ -546,13 +683,17 @@ async function loadStream() {
   const cameras = await res.json();
   const cam = cameras.find(c => c.name === camName);
   const btn = document.getElementById('btnStream');
+  const torchActions = document.getElementById('torchActions');
   if (!cam) return;
+
+  torchActions.style.display = 'none';
 
   document.getElementById('composeFps').value = cam.video_fps || 60;
   snapshotInterval = cam.interval || 30;
   document.getElementById('composeFactor').value = cam.video_speed_factor || 1.0;
   document.getElementById('composeEncoder').value = cam.video_encoder || 'libx264';
   document.getElementById('composeQuality').value = cam.video_quality ?? 23;
+  document.getElementById('composeSkipNight').checked = false;
   document.getElementById('composeWatermark').checked = cam.watermark?.enabled !== false;
   document.getElementById('composeWatermarkPosition').value = cam.watermark?.position || 'bottom-right';
   document.getElementById('composeWatermarkSize').value = cam.watermark?.size || 24;
@@ -564,6 +705,9 @@ async function loadStream() {
     streamSnapshotUrl = latestSnapshotUrl(cam);
     btn.disabled = false;
     document.getElementById('streamBox').innerHTML = renderStreamPoster();
+  }
+  if (cam.daylight?.torch_configured) {
+    torchActions.style.display = 'flex';
   }
 }
 
@@ -642,6 +786,19 @@ async function triggerCapture() {
   setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; loadSnapshots(); }, 1500);
 }
 
+async function toggleTorch(action) {
+  const btn = document.getElementById(action === 'on' ? 'btnTorchOn' : 'btnTorchOff');
+  const original = action === 'on' ? '开灯' : '关灯';
+  btn.disabled = true;
+  btn.textContent = action === 'on' ? '开灯中...' : '关灯中...';
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/torch/${action}`, { method: 'POST' });
+  btn.textContent = res.ok ? '✓ 成功' : '失败';
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.disabled = false;
+  }, 1500);
+}
+
 function clampNumber(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -710,7 +867,9 @@ function updateComposeEstimate() {
   const speed = composeSpeed();
   const encoder = document.getElementById('composeEncoder').value || 'libx264';
   const quality = composeQuality();
-  const outputFrames = composeFrameCount(sourceCount, fps, speed);
+  const skipNight = document.getElementById('composeSkipNight').checked;
+  const countedFrames = skipNight ? daytimeSnapshotCount(currentComposeDates()) : sourceCount;
+  const outputFrames = composeFrameCount(countedFrames, fps, speed);
   const duration = outputFrames ? outputFrames / fps : 0;
   const watermarkEnabled = document.getElementById('composeWatermark').checked;
   const position = document.getElementById('composeWatermarkPosition').selectedOptions[0]?.textContent || '-';
@@ -719,6 +878,7 @@ function updateComposeEstimate() {
   el.textContent = [
     rangeLabel,
     `原始 ${sourceCount} 张`,
+    skipNight ? `白天 ${countedFrames} 张` : '不过滤黑夜',
     `输出 ${outputFrames} 帧`,
     `预计 ${formatDuration(duration)}`,
     `帧率 ${fps}`,
@@ -732,7 +892,7 @@ function updateComposeEstimate() {
 }
 
 function bindComposeEstimateInputs() {
-  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize')
+  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeSkipNight, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize')
     .forEach(el => {
       if (el.dataset.boundEstimate) return;
       el.dataset.boundEstimate = '1';
@@ -748,6 +908,7 @@ function composeQueryParams(targetDate) {
     speed_multiplier: String(composeSpeed()),
     video_encoder: document.getElementById('composeEncoder').value || 'libx264',
     video_quality: String(composeQuality()),
+    skip_night: String(document.getElementById('composeSkipNight').checked),
     watermark_enabled: String(watermarkEnabled),
     watermark_position: document.getElementById('composeWatermarkPosition').value,
     watermark_size: String(clampNumber(document.getElementById('composeWatermarkSize').value, 8, 96, 24))
@@ -854,6 +1015,7 @@ function setRangeBoundary(type) {
   updateRangeSummary();
   updateComposeEstimate();
   renderVideos();
+  refreshDaylightInfo();
 }
 
 function useSelectedWeekRange() {
@@ -862,6 +1024,7 @@ function useSelectedWeekRange() {
   updateRangeSummary();
   updateComposeEstimate();
   renderVideos();
+  refreshDaylightInfo();
 }
 
 function useSelectedMonthRange() {
@@ -870,6 +1033,7 @@ function useSelectedMonthRange() {
   updateRangeSummary();
   updateComposeEstimate();
   renderVideos();
+  refreshDaylightInfo();
 }
 
 document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });

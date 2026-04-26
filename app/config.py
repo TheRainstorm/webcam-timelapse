@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 SUPPORTED_VIDEO_ENCODERS = {
     "libx264",
@@ -23,6 +23,25 @@ class WatermarkConfig(BaseModel):
     format: str = "%Y-%m-%d %H:%M:%S"
 
 
+class DaylightConfig(BaseModel):
+    enabled: bool = False
+    latitude: float | None = None
+    longitude: float | None = None
+    timezone: str = "Asia/Shanghai"
+    torch_on_url: Optional[str] = None
+    torch_off_url: Optional[str] = None
+    disable_night_snapshots: bool = False
+
+    @model_validator(mode="after")
+    def validate_daylight(self) -> "DaylightConfig":
+        needs_location = self.enabled or self.disable_night_snapshots or self.torch_on_url or self.torch_off_url
+        if needs_location and (self.latitude is None or self.longitude is None):
+            raise ValueError("daylight.latitude and daylight.longitude are required when daylight rules are enabled")
+        if (self.torch_on_url is None) != (self.torch_off_url is None):
+            raise ValueError("daylight.torch_on_url and daylight.torch_off_url must be configured together")
+        return self
+
+
 class CameraConfig(BaseModel):
     name: str
     snapshot_url: str
@@ -37,6 +56,7 @@ class CameraConfig(BaseModel):
     vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
+    daylight: DaylightConfig = DaylightConfig()
 
     @field_validator("video_time")
     @classmethod
@@ -70,6 +90,7 @@ class GlobalConfig(BaseModel):
     vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
     watermark: WatermarkConfig = WatermarkConfig()
+    daylight: DaylightConfig = DaylightConfig()
 
     @field_validator("video_encoder")
     @classmethod

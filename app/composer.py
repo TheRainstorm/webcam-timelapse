@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.config import CameraConfig, WatermarkConfig
+from app.daylight import frame_in_daylight
 from app.watermark import apply_watermark
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class ComposeOptions:
     speed_multiplier: float | None = None
     video_encoder: str | None = None
     video_quality: int | None = None
+    skip_night: bool = False
     watermark: WatermarkConfig | None = None
 
 
@@ -103,6 +105,17 @@ def _collect_frames(cam: CameraConfig, target_dates: list[date]) -> list[tuple[d
     return frames
 
 
+def _filter_daylight_frames(cam: CameraConfig, frames: list[tuple[date, Path]]) -> list[tuple[date, Path]]:
+    if not frames:
+        return frames
+    filtered = [
+        (frame_date, frame)
+        for frame_date, frame in frames
+        if frame_in_daylight(cam, frame_date, frame.name)
+    ]
+    return filtered
+
+
 def period_bounds(anchor_date: date, period: str) -> tuple[date, date]:
     if period == "day":
         return anchor_date, anchor_date
@@ -178,6 +191,8 @@ def compose_video(
     else:
         start_date, end_date = period_bounds(target_date, period)
     frames = _collect_frames(cam, _range_dates(start_date, end_date))
+    if options.skip_night:
+        frames = _filter_daylight_frames(cam, frames)
     if not frames:
         logger.warning(
             "[%s] 无快照帧: period=%s, range=%s..%s",

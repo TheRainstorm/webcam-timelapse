@@ -7,6 +7,14 @@ global:
   video_quality: 23         # 统一质量参数，越小越清晰
   vaapi_device: /dev/dri/renderD128
   video_time: "00:05"       # 每日合成触发时间
+  daylight:
+    enabled: false
+    latitude: 31.2304
+    longitude: 121.4737
+    timezone: Asia/Shanghai
+    torch_on_url:
+    torch_off_url:
+    disable_night_snapshots: false
   watermark:
     enabled: true
     position: top-left # top-left / top-right / bottom-left / bottom-right
@@ -22,7 +30,14 @@ cameras:
     stream_url: "/go2rtc/webrtc.html?src=front-door"
     output_dir: "/data/front-door"
     interval: 30
+    daylight:
+      enabled: true
+      torch_on_url: "http://192.168.35.126:8080/enabletorch"
+      torch_off_url: "http://192.168.35.126:8080/disabletorch"
 
   - name: "Garden"
     snapshot_url: "http://192.168.1.11/snapshot"
     output_dir: "/data/garden"
+    daylight:
+      enabled: true
+      disable_night_snapshots: true

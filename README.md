@@ -220,6 +220,14 @@ global:
   video_quality: 23
   vaapi_device: /dev/dri/renderD128
   video_time: "00:05"
+  daylight:
+    enabled: false
+    latitude: 31.2304
+    longitude: 121.4737
+    timezone: Asia/Shanghai
+    torch_on_url:
+    torch_off_url:
+    disable_night_snapshots: false
   watermark:
     enabled: true
     position: bottom-right
@@ -250,7 +258,36 @@ cameras:
 - `video_quality`: 合成质量参数，范围 `0-51`，越小质量越高；默认 `23`。
 - `vaapi_device`: VAAPI 设备路径，默认 `/dev/dri/renderD128`。
 - `video_time`: 每日合成任务触发时间，格式为 `HH:MM`，默认合成前一天。
+- `daylight.latitude` / `daylight.longitude`: 用于计算日出日落时间。
+- `daylight.timezone`: 日出日落计算使用的时区。
+- `daylight.torch_on_url` / `daylight.torch_off_url`: 可选，配置后会在日落后发送 `POST` 开灯、日出后发送 `POST` 关灯。
+- `daylight.disable_night_snapshots`: 可选，开启后夜间不抓拍。
 - `watermark.font`: 水印字体路径；Docker Compose 会把 `./fonts` 挂载到 `/app/fonts`。
+
+网页上还支持“合成时跳过黑夜”，这个选项只影响当前手动合成请求，不会改动配置文件里的抓拍规则。它和 `daylight.disable_night_snapshots` 是互补关系：
+
+- `daylight.disable_night_snapshots`: 控制定时抓拍时夜间是否保存快照
+- 网页“合成时跳过黑夜”: 控制手动合成视频时是否过滤夜间快照
+
+`daylight` 既可以放在 `global` 下作为所有摄像头默认值，也可以在单个摄像头下覆盖。常见用法：
+
+```yaml
+cameras:
+  - name: "Balcony"
+    snapshot_url: "http://192.168.35.126:8080/photo.jpg"
+    output_dir: "/data/balcony"
+    daylight:
+      enabled: true
+      torch_on_url: "http://192.168.35.126:8080/enabletorch"
+      torch_off_url: "http://192.168.35.126:8080/disabletorch"
+
+  - name: "Garden"
+    snapshot_url: "http://192.168.35.127:8080/photo.jpg"
+    output_dir: "/data/garden"
+    daylight:
+      enabled: true
+      disable_night_snapshots: true
+```
 
 使用 VAAPI 时，在 compose 文件里把 `extends.service` 改成 `vaapi`。对应配置定义在 `deploy/hwaccel.transcoding.yml`，会把宿主机的 `/dev/dri` 暴露给 `timelapse` 容器。镜像内已包含 `libva2`、`mesa-va-drivers`、`vainfo`，用于 AMD `radeonsi` VAAPI 编码。
 

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from app.capture import capture_snapshot
 from app.composer import ComposeOptions, compose_video, period_bounds
 from app.config import CameraConfig
+from app.daylight import has_daylight_rules, is_daylight, set_torch, sun_window
 
 router = APIRouter(prefix="/api")
 
@@ -59,8 +60,62 @@ async def list_cameras() -> list[dict[str, Any]]:
             "video_encoder": cam.video_encoder,
             "video_quality": cam.video_quality,
             "watermark": cam.watermark.model_dump(),
+            "daylight": {
+                "enabled": cam.daylight.enabled,
+                "latitude": cam.daylight.latitude,
+                "longitude": cam.daylight.longitude,
+                "disable_night_snapshots": cam.daylight.disable_night_snapshots,
+                "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+                "configured": has_daylight_rules(cam),
+                "timezone": cam.daylight.timezone,
+            },
         })
     return result
+
+
+@router.get("/cameras/{name}/daylight")
+async def get_daylight(name: str, start_date: str | None = None, end_date: str | None = None) -> dict[str, Any]:
+    cam = _get_cam(name)
+    if not has_daylight_rules(cam):
+        return {
+            "camera": name,
+            "configured": False,
+            "dates": {},
+            "enabled": cam.daylight.enabled,
+            "latitude": cam.daylight.latitude,
+            "longitude": cam.daylight.longitude,
+            "timezone": cam.daylight.timezone,
+            "disable_night_snapshots": cam.daylight.disable_night_snapshots,
+            "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+        }
+
+    start = date.fromisoformat(start_date) if start_date else date.today()
+    end = date.fromisoformat(end_date) if end_date else start
+    if start > end:
+        start, end = end, start
+    total_days = (end - start).days + 1
+    dates: dict[str, Any] = {}
+    for offset in range(total_days):
+        current = start.fromordinal(start.toordinal() + offset)
+        sunrise, sunset = sun_window(cam, current)
+        dates[current.isoformat()] = {
+            "sunrise": sunrise.isoformat(),
+            "sunset": sunset.isoformat(),
+            "sunrise_time": sunrise.strftime("%H:%M:%S"),
+            "sunset_time": sunset.strftime("%H:%M:%S"),
+            "is_daylight_now": is_daylight(cam) if current == date.today() else None,
+        }
+    return {
+        "camera": name,
+        "configured": True,
+        "dates": dates,
+        "enabled": cam.daylight.enabled,
+        "latitude": cam.daylight.latitude,
+        "longitude": cam.daylight.longitude,
+        "timezone": cam.daylight.timezone,
+        "disable_night_snapshots": cam.daylight.disable_night_snapshots,
+        "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+    }
 
 
 @router.get("/cameras/{name}/snapshots")
@@ -163,6 +218,20 @@ async def trigger_capture(name: str) -> dict[str, Any]:
     return {"status": "ok", "path": str(path)}
 
 
+@router.post("/cameras/{name}/torch/{action}")
+async def trigger_torch(name: str, action: str) -> dict[str, Any]:
+    cam = _get_cam(name)
+    if action not in {"on", "off"}:
+        raise HTTPException(400, "action must be on or off")
+    if not cam.daylight.torch_on_url or not cam.daylight.torch_off_url:
+        raise HTTPException(400, "Torch URLs are not configured")
+    try:
+        await set_torch(cam, action == "on")
+    except Exception as exc:
+        raise HTTPException(502, f"Torch {action} failed: {exc}") from exc
+    return {"status": "ok", "action": action}
+
+
 @router.post("/cameras/{name}/compose")
 async def trigger_compose(
     name: str,
@@ -174,6 +243,7 @@ async def trigger_compose(
     speed_multiplier: float | None = None,
     video_encoder: str | None = None,
     video_quality: int | None = None,
+    skip_night: bool = False,
     watermark_enabled: bool | None = None,
     watermark_position: str | None = None,
     watermark_size: int | None = None,
@@ -225,6 +295,7 @@ async def trigger_compose(
         speed_multiplier=speed_multiplier,
         video_encoder=video_encoder,
         video_quality=video_quality,
+        skip_night=skip_night,
         watermark=watermark,
     )
     loop = asyncio.get_event_loop()

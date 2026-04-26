@@ -7,3 +7,4 @@ pyyaml==6.0.2
 pydantic==2.8.2
 pydantic-settings==2.4.0
 aiofiles==24.1.0
+astral==3.2
