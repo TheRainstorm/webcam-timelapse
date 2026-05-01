@@ -18,20 +18,39 @@
     <!-- 左列：实时流 + 统计 -->
     <div>
       <div class="panel" style="margin-bottom:20px">
+        <h3>相机状态</h3>
+        <div class="tool-section">
+          <div class="status-summary">
+            <div class="stats compact" id="stats">
+              <div class="stat"><div class="val" id="statSnaps">-</div><div class="lbl">总快照</div></div>
+              <div class="stat"><div class="val" id="statVideos">-</div><div class="lbl">视频数</div></div>
+              <div class="stat"><div class="val" id="statDays">-</div><div class="lbl">记录天数</div></div>
+            </div>
+            <div class="status-list" id="cameraStatusPanel">
+              <div class="status-list-item">
+                <span class="status-dot inactive" id="cameraOnlineDot"></span>
+                <span>是否在线</span>
+                <button class="btn" id="btnTestCamera" type="button" onclick="testCamera()">检测中</button>
+              </div>
+              <div class="status-list-item">
+                <span class="status-dot active paused" id="cameraActiveDot"></span>
+                <span>服务状态</span>
+                <button class="btn" id="btnToggleCamera" type="button" onclick="toggleCameraActive()">运行中</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:20px">
         <h3>实时预览</h3>
         <div class="stream-box" id="streamBox">
           <div class="stream-placeholder">无实时流配置</div>
         </div>
-        <div class="tool-section">
-          <div class="section-title">预览控制</div>
-          <div class="preview-actions">
-            <button class="btn" id="btnStream" onclick="toggleStream()" disabled>播放实时预览</button>
-            <div class="preview-actions" id="torchActions" style="display:none">
-              <button class="btn" id="btnTorchOn" onclick="toggleTorch('on')">开灯</button>
-              <button class="btn" id="btnTorchOff" onclick="toggleTorch('off')">关灯</button>
-            </div>
-          </div>
-        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:20px">
+        <h3>手动操作与合成设置</h3>
         <div class="tool-section">
           <div class="section-title">手动操作</div>
           <div class="preview-actions">
@@ -105,17 +124,15 @@
       </div>
 
       <div class="panel">
-        <h3>统计</h3>
-        <div class="stats" id="stats">
-          <div class="stat"><div class="val" id="statSnaps">-</div><div class="lbl">总快照</div></div>
-          <div class="stat"><div class="val" id="statVideos">-</div><div class="lbl">视频数</div></div>
-          <div class="stat"><div class="val" id="statDays">-</div><div class="lbl">记录天数</div></div>
-        </div>
+        <h3>Daylight</h3>
         <div class="daylight-box">
           <div class="daylight-head">
-            <div class="section-title">Daylight</div>
             <div class="daylight-badges" id="daylightBadges">
               <span class="tag">未配置</span>
+            </div>
+            <div class="preview-actions" id="torchActions" style="display:none">
+              <button class="btn" id="btnTorchOn" onclick="toggleTorch('on')">开灯</button>
+              <button class="btn" id="btnTorchOff" onclick="toggleTorch('off')">关灯</button>
             </div>
           </div>
           <div class="daylight-feature-grid">
@@ -204,9 +221,12 @@ let rangeStartDate = '';
 let rangeEndDate = '';
 let streamUrl = '';
 let streamSnapshotUrl = '';
+let snapshotProbeUrl = '';
 let streamPlaying = false;
 let daylightInfo = null;
 let daylightDates = {};
+let cameraActive = true;
+let cameraOnline = false;
 let modalType = '';
 let modalSnapDate = '';
 let modalSnapFrames = [];
@@ -260,6 +280,63 @@ function renderStreamPoster() {
       </button>`;
   }
   return '<button class="stream-poster stream-placeholder" type="button" onclick="toggleStream()">点击播放实时预览</button>';
+}
+
+function cameraActiveLabel() {
+  return cameraActive ? '运行中' : '已关闭';
+}
+
+function updateCameraStatusUI() {
+  const onlineDot = document.getElementById('cameraOnlineDot');
+  const activeDot = document.getElementById('cameraActiveDot');
+  const toggle = document.getElementById('btnToggleCamera');
+  const testBtn = document.getElementById('btnTestCamera');
+  onlineDot.classList.remove('active', 'inactive');
+  onlineDot.classList.add(cameraOnline ? 'active' : 'inactive');
+  testBtn.textContent = cameraOnline ? '在线' : '离线';
+  activeDot.classList.toggle('paused', !cameraActive);
+  toggle.textContent = cameraActiveLabel();
+  ['btnCapture', 'btnCompose', 'btnComposeRange', 'btnComposeAll'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !cameraActive;
+  });
+}
+
+function probeImageUrl(url, timeoutMs = 5000) {
+  return new Promise(resolve => {
+    if (!url) { resolve(false); return; }
+    const img = new Image();
+    const timer = setTimeout(() => done(false), timeoutMs);
+    function done(ok) {
+      clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      resolve(ok);
+    }
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    img.src = `${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
+  });
+}
+
+function probeFrameUrl(url, timeoutMs = 5000) {
+  return new Promise(resolve => {
+    if (!url) { resolve(null); return; }
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    const timer = setTimeout(() => done(false), timeoutMs);
+    function done(ok) {
+      clearTimeout(timer);
+      frame.onload = null;
+      frame.onerror = null;
+      frame.remove();
+      resolve(ok);
+    }
+    frame.onload = () => done(true);
+    frame.onerror = () => done(false);
+    frame.src = `${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
+    document.body.appendChild(frame);
+  });
 }
 
 function formatMonth(date) {
@@ -682,14 +759,16 @@ async function loadStream() {
   const res = await fetch('/api/cameras');
   const cameras = await res.json();
   const cam = cameras.find(c => c.name === camName);
-  const btn = document.getElementById('btnStream');
   const torchActions = document.getElementById('torchActions');
   if (!cam) return;
 
   torchActions.style.display = 'none';
+  cameraActive = cam.active !== false;
+  updateCameraStatusUI();
 
   document.getElementById('composeFps').value = cam.video_fps || 60;
   snapshotInterval = cam.interval || 30;
+  snapshotProbeUrl = cam.snapshot_url || '';
   document.getElementById('composeFactor').value = cam.video_speed_factor || 1.0;
   document.getElementById('composeEncoder').value = cam.video_encoder || 'libx264';
   document.getElementById('composeQuality').value = cam.video_quality ?? 23;
@@ -703,27 +782,65 @@ async function loadStream() {
   if (cam.stream_url) {
     streamUrl = cam.stream_url;
     streamSnapshotUrl = latestSnapshotUrl(cam);
-    btn.disabled = false;
     document.getElementById('streamBox').innerHTML = renderStreamPoster();
   }
   if (cam.daylight?.torch_configured) {
     torchActions.style.display = 'flex';
   }
+  testCamera(true);
+}
+
+async function toggleCameraActive() {
+  const toggle = document.getElementById('btnToggleCamera');
+  const nextActive = !cameraActive;
+  toggle.disabled = true;
+  const params = new URLSearchParams({ active: String(nextActive) });
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/status?${params.toString()}`, { method: 'POST' });
+  if (res.ok) {
+    cameraActive = nextActive;
+    updateCameraStatusUI();
+    toggle.disabled = false;
+    return;
+  }
+  updateCameraStatusUI();
+  setTimeout(() => {
+    updateCameraStatusUI();
+    toggle.disabled = false;
+  }, 1200);
+}
+
+async function testCamera(silent = false) {
+  const btn = document.getElementById('btnTestCamera');
+  if (!silent) {
+    btn.disabled = true;
+    btn.textContent = '检测中...';
+  }
+  const snapshotOk = await probeImageUrl(snapshotProbeUrl || '');
+  const streamOk = await probeFrameUrl(streamUrl || '');
+  cameraOnline = snapshotOk && (streamOk !== false);
+  updateCameraStatusUI();
+  if (silent) return;
+  const parts = [
+    `快照 ${snapshotOk ? '通' : '断'}`,
+    streamOk === null ? '实时流 未配置' : `实时流 ${streamOk ? '通' : '断'}`,
+  ];
+  btn.textContent = parts.join(' / ');
+  setTimeout(() => {
+    btn.textContent = cameraOnline ? '在线' : '离线';
+    btn.disabled = false;
+  }, 1800);
 }
 
 function toggleStream() {
   if (!streamUrl) return;
 
   const box = document.getElementById('streamBox');
-  const btn = document.getElementById('btnStream');
   streamPlaying = !streamPlaying;
 
   if (streamPlaying) {
     box.innerHTML = renderStreamEmbed(streamUrl);
-    btn.textContent = '暂停实时预览';
   } else {
     box.innerHTML = renderStreamPoster();
-    btn.textContent = '播放实时预览';
   }
 }
 

@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 
+from app.camera_state import is_camera_active, set_camera_active
 from app.capture import capture_snapshot
 from app.composer import ComposeOptions, compose_video, period_bounds
 from app.config import CameraConfig
@@ -32,6 +33,11 @@ def _get_cam(name: str) -> CameraConfig:
     raise HTTPException(404, f"Camera '{name}' not found")
 
 
+def _require_camera_active(cam: CameraConfig) -> None:
+    if not is_camera_active(cam):
+        raise HTTPException(409, "Camera is inactive")
+
+
 @router.get("/cameras")
 async def list_cameras() -> list[dict[str, Any]]:
     result = []
@@ -52,6 +58,7 @@ async def list_cameras() -> list[dict[str, Any]]:
             "name": cam.name,
             "snapshot_url": cam.snapshot_url,
             "stream_url": cam.stream_url,
+            "active": is_camera_active(cam),
             "today_count": today_count,
             "latest_snapshot": latest,
             "interval": cam.interval,
@@ -212,6 +219,7 @@ async def delete_video(name: str, video_id: str) -> dict[str, str]:
 @router.post("/cameras/{name}/trigger")
 async def trigger_capture(name: str) -> dict[str, Any]:
     cam = _get_cam(name)
+    _require_camera_active(cam)
     path = await capture_snapshot(cam)
     if path is None:
         raise HTTPException(502, "Capture failed")
@@ -232,6 +240,16 @@ async def trigger_torch(name: str, action: str) -> dict[str, Any]:
     return {"status": "ok", "action": action}
 
 
+@router.post("/cameras/{name}/status")
+async def update_camera_status(name: str, active: bool) -> dict[str, Any]:
+    cam = _get_cam(name)
+    current = is_camera_active(cam)
+    if current == active:
+        return {"status": "ok", "camera": name, "active": current}
+    set_camera_active(cam.name, active)
+    return {"status": "ok", "camera": name, "active": active}
+
+
 @router.post("/cameras/{name}/compose")
 async def trigger_compose(
     name: str,
@@ -249,6 +267,7 @@ async def trigger_compose(
     watermark_size: int | None = None,
 ) -> dict[str, Any]:
     cam = _get_cam(name)
+    _require_camera_active(cam)
     d = date.fromisoformat(target_date) if target_date else None
     range_start = date.fromisoformat(start_date) if start_date else None
     range_end = date.fromisoformat(end_date) if end_date else None

@@ -47,6 +47,7 @@ class CameraConfig(BaseModel):
     snapshot_url: str
     stream_url: Optional[str] = None
     output_dir: str
+    active: bool = True
     interval: int = 30
     retention_days: int = 30
     video_fps: int = 60
@@ -81,6 +82,7 @@ class CameraConfig(BaseModel):
 
 
 class GlobalConfig(BaseModel):
+    active: bool = True
     interval: int = 30
     retention_days: int = 30
     video_fps: int = 60

@@ -1,4 +1,5 @@
 global:
+  active: true              # 是否启用该默认相机抓拍与合成
   interval: 30              # 抓帧间隔（秒）
   retention_days: 30        # 快照保留天数
   video_fps: 60             # 合成视频输出帧率
@@ -26,6 +27,7 @@ global:
 
 cameras:
   - name: "Front Door"
+    active: true
     snapshot_url: "http://192.168.1.10/snapshot"
     stream_url: "/go2rtc/webrtc.html?src=front-door"
     output_dir: "/data/front-door"
@@ -36,6 +38,7 @@ cameras:
       torch_off_url: "http://192.168.35.126:8080/disabletorch"
 
   - name: "Garden"
+    active: true
     snapshot_url: "http://192.168.1.11/snapshot"
     output_dir: "/data/garden"
     daylight:

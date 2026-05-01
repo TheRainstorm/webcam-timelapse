@@ -212,6 +212,7 @@ SCHEDULER_ENABLED=false uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 ```yaml
 global:
+  active: true
   interval: 30
   retention_days: 30
   video_fps: 60
@@ -250,6 +251,7 @@ cameras:
 - `snapshot_url`: 必填，返回 JPEG 图片的摄像头截图地址。
 - `stream_url`: 可选，用于前端实时预览；建议只配置 path，例如 `/go2rtc/webrtc.html?src=front-door`，由当前访问域名和反向代理补全。
 - `output_dir`: 必填，快照和视频的输出根目录。
+- `active`: 是否启用该摄像头的抓帧与视频合成；关闭后历史快照、视频和实时流仍可查看。
 - `interval`: 抓帧间隔，单位秒。
 - `retention_days`: 快照保留天数。
 - `video_fps`: 合成视频输出帧率。
@@ -326,6 +328,7 @@ docker compose exec timelapse ffmpeg -hide_banner -encoders | grep vaapi
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/cameras` | 获取摄像头列表和当前状态 |
+| `POST` | `/api/cameras/{name}/status?active=true|false` | 开启或关闭该摄像头的抓帧与合成 |
 | `GET` | `/api/cameras/{name}/snapshots` | 获取摄像头快照日期和文件列表 |
 | `GET` | `/api/cameras/{name}/videos` | 获取摄像头视频列表 |
 | `DELETE` | `/api/cameras/{name}/videos/{video_date}` | 删除指定日期的视频 |

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import init_router, router
+from app.camera_state import init_camera_state
 from app.config import load_config
 from app.scheduler import build_scheduler
 
@@ -29,6 +30,7 @@ SCHEDULER_ENABLED = os.environ.get("SCHEDULER_ENABLED", "true").lower() not in {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global_cfg, cameras = load_config(CONFIG_PATH)
+    init_camera_state(cameras)
     init_router(cameras)
 
     scheduler = None

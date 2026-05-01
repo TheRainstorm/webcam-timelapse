@@ -6,6 +6,7 @@ import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from app.camera_state import is_camera_active
 from app.capture import capture_snapshot
 from app.cleaner import clean_snapshots
 from app.composer import compose_video
@@ -65,6 +66,9 @@ def build_scheduler(cameras: list[CameraConfig]) -> AsyncIOScheduler:
 
 
 async def _capture_job(cam: CameraConfig) -> None:
+    if not is_camera_active(cam):
+        logger.info("[%s] 已关闭，跳过抓帧", cam.name)
+        return
     if has_daylight_rules(cam) and cam.daylight.disable_night_snapshots and not is_daylight(cam):
         logger.info("[%s] 夜间跳过抓帧", cam.name)
         return
@@ -72,6 +76,9 @@ async def _capture_job(cam: CameraConfig) -> None:
 
 
 async def _compose_job(cam: CameraConfig) -> None:
+    if not is_camera_active(cam):
+        logger.info("[%s] 已关闭，跳过视频合成", cam.name)
+        return
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, compose_video, cam, None)
 
