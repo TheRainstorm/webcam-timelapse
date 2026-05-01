@@ -55,14 +55,27 @@
       </div>
 
       <div class="panel" style="margin-bottom:20px">
-        <h3>手动操作与合成设置</h3>
+        <h3>合成视频</h3>
         <div class="tool-section">
-          <div class="section-title">手动操作</div>
+          <div class="section-title">合成范围</div>
           <div class="preview-actions">
             <button class="btn btn-primary" id="btnCapture" onclick="triggerCapture()">立即抓帧</button>
             <button class="btn" id="btnCompose" onclick="triggerComposeDay()">合成选中日期视频</button>
-            <button class="btn" id="btnComposeRange" onclick="triggerComposeRange()">合成选中区间视频</button>
-            <button class="btn" id="btnComposeAll" onclick="triggerComposeAll()">合成全部日期视频</button>
+            <button class="btn" id="btnComposeDateTimeRange" type="button" onclick="triggerComposeDateTimeRange()">合成选定时间段</button>
+          </div>
+          <div class="advanced-grid">
+            <label>
+              <span>开始时间</span>
+              <input id="composeStartDateTime" type="text" placeholder="yyyy-mm-dd hh:mm:ss">
+            </label>
+            <label>
+              <span>结束时间</span>
+              <input id="composeEndDateTime" type="text" placeholder="yyyy-mm-dd hh:mm:ss">
+            </label>
+          </div>
+          <div class="preview-actions">
+            <button class="btn" type="button" onclick="setComposeDateTimeBoundary('start')">设置开始</button>
+            <button class="btn" type="button" onclick="setComposeDateTimeBoundary('end')">设置结束</button>
           </div>
         </div>
         <div class="tool-section">
@@ -182,13 +195,6 @@
           <div class="day-summary" id="daySummary">选择日期查看快照和视频</div>
           <button class="btn" id="btnSnapSort" type="button" onclick="toggleSnapSort()">快照：新到旧</button>
         </div>
-        <div class="range-toolbar">
-          <button class="btn" type="button" onclick="setRangeBoundary('start')">设为开始</button>
-          <button class="btn" type="button" onclick="setRangeBoundary('end')">设为结束</button>
-          <button class="btn" type="button" onclick="useSelectedWeekRange()">选中周</button>
-          <button class="btn" type="button" onclick="useSelectedMonthRange()">选中月</button>
-          <div class="range-summary" id="rangeSummary">区间：未设置</div>
-        </div>
         <div class="snap-grid" id="snapGrid"><div class="empty">选择日期查看快照</div></div>
         <div class="pager" id="snapPager"></div>
       </div>
@@ -222,8 +228,6 @@ let snapPage = 1;
 let snapSort = 'desc';
 const snapsPerPage = 24;
 let snapshotInterval = 60;
-let rangeStartDate = '';
-let rangeEndDate = '';
 let streamUrl = '';
 let streamSnapshotUrl = '';
 let snapshotProbeUrl = '';
@@ -304,7 +308,7 @@ function updateCameraStatusUI() {
   toggle.classList.toggle('on', cameraActive);
   toggle.classList.toggle('off', !cameraActive);
   toggle.setAttribute('aria-label', `服务状态：${cameraActiveLabel()}`);
-  ['btnCapture', 'btnCompose', 'btnComposeRange', 'btnComposeAll'].forEach(id => {
+  ['btnCapture', 'btnCompose', 'btnComposeDateTimeRange'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !cameraActive;
   });
@@ -401,31 +405,16 @@ function monthRange(dateStr) {
   return [start, end];
 }
 
-function normalizedRange() {
-  if (!rangeStartDate || !rangeEndDate) return null;
-  return rangeStartDate <= rangeEndDate
-    ? [rangeStartDate, rangeEndDate]
-    : [rangeEndDate, rangeStartDate];
-}
-
-function updateRangeSummary() {
-  const el = document.getElementById('rangeSummary');
-  const range = normalizedRange();
-  if (!range) {
-    el.textContent = '区间：未设置';
-    return;
-  }
-  const [start, end] = range;
-  let frameCount = 0;
-  expandDateRange(start, end).forEach(date => {
-    frameCount += (snapData[date] || []).length;
-  });
-  el.textContent = `区间：${start} ~ ${end} · ${frameCount} 张快照`;
-}
-
 function currentComposeDates() {
-  const range = normalizedRange();
-  return range ? expandDateRange(range[0], range[1]) : (selectedDate ? [selectedDate] : []);
+  const { start, end } = composeDateTimeValues();
+  if (start && end) {
+    const startDate = start.slice(0, 10);
+    const endDate = end.slice(0, 10);
+    return startDate <= endDate
+      ? expandDateRange(startDate, endDate)
+      : expandDateRange(endDate, startDate);
+  }
+  return selectedDate ? [selectedDate] : [];
 }
 
 function daylightWindow(date) {
@@ -637,7 +626,6 @@ function selectDate(d) {
 
 function renderCurrentDay() {
   renderCalendar();
-  updateRangeSummary();
   renderDaylightInfo();
   renderSnapshots();
   renderVideos();
@@ -785,6 +773,8 @@ async function loadStream() {
   document.getElementById('composeWatermarkPosition').value = cam.watermark?.position || 'bottom-right';
   document.getElementById('composeWatermarkSize').value = cam.watermark?.size || 24;
   bindComposeEstimateInputs();
+  setComposeDateTimeBoundary('start');
+  setComposeDateTimeBoundary('end');
   updateComposeEstimate();
 
   if (cam.stream_url) {
@@ -977,15 +967,15 @@ function updateComposeEstimate() {
   const el = document.getElementById('composeEstimate');
   if (!el) return;
 
-  const range = normalizedRange();
+  const { start, end } = composeDateTimeValues();
   let sourceCount = (snapData[selectedDate] || []).length;
   let rangeLabel = `当天 ${selectedDate || '未选择'}`;
-  if (range) {
+  if (start && end) {
     sourceCount = 0;
-    expandDateRange(range[0], range[1]).forEach(date => {
+    currentComposeDates().forEach(date => {
       sourceCount += (snapData[date] || []).length;
     });
-    rangeLabel = `区间 ${range[0]} ~ ${range[1]}`;
+    rangeLabel = `时间段 ${start} ~ ${end}`;
   }
   const fps = composeFps();
   const factor = composeFactor();
@@ -1017,7 +1007,7 @@ function updateComposeEstimate() {
 }
 
 function bindComposeEstimateInputs() {
-  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeSkipNight, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize')
+  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeSkipNight, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize, #composeStartDateTime, #composeEndDateTime')
     .forEach(el => {
       if (el.dataset.boundEstimate) return;
       el.dataset.boundEstimate = '1';
@@ -1042,6 +1032,24 @@ function composeQueryParams(targetDate) {
   return params.toString();
 }
 
+function composeDateTimeValues() {
+  return {
+    start: document.getElementById('composeStartDateTime').value.trim(),
+    end: document.getElementById('composeEndDateTime').value.trim(),
+  };
+}
+
+function setComposeDateTimeBoundary(type) {
+  if (!selectedDate) return;
+  const id = type === 'start' ? 'composeStartDateTime' : 'composeEndDateTime';
+  const input = document.getElementById(id);
+  const current = input.value.trim();
+  const timePart = current.match(/\d{2}:\d{2}:\d{2}$/)?.[0] || (type === 'start' ? '00:00:00' : '23:59:59');
+  input.value = `${selectedDate} ${timePart}`;
+  updateComposeEstimate();
+  refreshDaylightInfo();
+}
+
 async function triggerComposeDay() {
   const btn = document.getElementById('btnCompose');
   const frames = snapData[selectedDate] || [];
@@ -1064,62 +1072,24 @@ async function triggerComposeDay() {
   }, 2000);
 }
 
-async function triggerComposeRange() {
-  const btn = document.getElementById('btnComposeRange');
-  const range = normalizedRange();
-  if (!range) {
-    btn.textContent = '先设区间';
-    setTimeout(() => { btn.textContent = '合成选中区间视频'; }, 1500);
-    return;
-  }
-
-  let frameCount = 0;
-  expandDateRange(range[0], range[1]).forEach(date => {
-    frameCount += (snapData[date] || []).length;
-  });
-  if (!frameCount) {
-    btn.textContent = '区间无快照';
-    setTimeout(() => { btn.textContent = '合成选中区间视频'; }, 1500);
+async function triggerComposeDateTimeRange() {
+  const btn = document.getElementById('btnComposeDateTimeRange');
+  const { start, end } = composeDateTimeValues();
+  if (!start || !end) {
+    btn.textContent = '先填时间';
+    setTimeout(() => { btn.textContent = '合成选定时间段'; }, 1500);
     return;
   }
 
   btn.disabled = true;
-  btn.textContent = `合成 ${range[0]} ~ ${range[1]}...`;
+  btn.textContent = '合成中...';
   const params = new URLSearchParams(composeQueryParams(''));
-  params.set('period', 'range');
-  params.set('start_date', range[0]);
-  params.set('end_date', range[1]);
+  params.set('start_datetime', start);
+  params.set('end_datetime', end);
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${params.toString()}`, { method: 'POST' });
-  btn.textContent = res.ok ? '✓ 已覆盖' : '失败';
+  btn.textContent = res.ok ? '✓ 已生成' : '失败';
   setTimeout(() => {
-    btn.textContent = '合成选中区间视频';
-    btn.disabled = false;
-    loadVideos();
-  }, 2000);
-}
-
-async function triggerComposeAll() {
-  const btn = document.getElementById('btnComposeAll');
-  const dates = Object.keys(snapData).sort();
-  if (!dates.length) {
-    btn.textContent = '无快照';
-    setTimeout(() => { btn.textContent = '合成全部日期视频'; }, 1500);
-    return;
-  }
-
-  btn.disabled = true;
-  let okCount = 0;
-  for (let i = 0; i < dates.length; i++) {
-    btn.textContent = `合成 ${i + 1}/${dates.length}`;
-    const params = new URLSearchParams(composeQueryParams(dates[i]));
-    params.set('period', 'day');
-    const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/compose?${params.toString()}`, { method: 'POST' });
-    if (res.ok) okCount++;
-  }
-
-  btn.textContent = `完成 ${okCount}/${dates.length}`;
-  setTimeout(() => {
-    btn.textContent = '合成全部日期视频';
+    btn.textContent = '合成选定时间段';
     btn.disabled = false;
     loadVideos();
   }, 2000);
@@ -1129,36 +1099,6 @@ async function deleteVideo(videoId) {
   if (!confirm(`确认删除 ${videoId} 的视频？`)) return;
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/videos/${encodeURIComponent(videoId)}`, { method: 'DELETE' });
   if (res.ok) { loadVideos(); }
-}
-
-function setRangeBoundary(type) {
-  if (!selectedDate) return;
-  if (type === 'start') rangeStartDate = selectedDate;
-  if (type === 'end') rangeEndDate = selectedDate;
-  if (!rangeStartDate) rangeStartDate = selectedDate;
-  if (!rangeEndDate) rangeEndDate = selectedDate;
-  updateRangeSummary();
-  updateComposeEstimate();
-  renderVideos();
-  refreshDaylightInfo();
-}
-
-function useSelectedWeekRange() {
-  if (!selectedDate) return;
-  [rangeStartDate, rangeEndDate] = weekRange(selectedDate);
-  updateRangeSummary();
-  updateComposeEstimate();
-  renderVideos();
-  refreshDaylightInfo();
-}
-
-function useSelectedMonthRange() {
-  if (!selectedDate) return;
-  [rangeStartDate, rangeEndDate] = monthRange(selectedDate);
-  updateRangeSummary();
-  updateComposeEstimate();
-  renderVideos();
-  refreshDaylightInfo();
 }
 
 document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });

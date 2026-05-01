@@ -1,7 +1,7 @@
 """RESTful API 路由"""
 from __future__ import annotations
 import asyncio
-from datetime import date
+from datetime import date, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,15 @@ def _get_cam(name: str) -> CameraConfig:
 def _require_camera_active(cam: CameraConfig) -> None:
     if not is_camera_active(cam):
         raise HTTPException(409, "Camera is inactive")
+
+
+def _parse_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError as exc:
+        raise HTTPException(400, "datetime must be in yyyy-mm-dd hh:mm:ss format") from exc
 
 
 @router.get("/cameras")
@@ -168,12 +177,20 @@ async def list_videos(name: str) -> dict[str, Any]:
                 scope = "range"
                 try:
                     start_raw, end_raw = v.stem.removeprefix("range-").split("_", 1)
-                    start_date = date.fromisoformat(start_raw)
-                    end_date = date.fromisoformat(end_raw)
-                    anchor_date = start_date
-                    start_date_str = start_date.isoformat()
-                    end_date_str = end_date.isoformat()
-                    label = f"{start_date_str} ~ {end_date_str}"
+                    if "T" in start_raw and "T" in end_raw:
+                        start_dt = datetime.strptime(start_raw, "%Y-%m-%dT%H-%M-%S")
+                        end_dt = datetime.strptime(end_raw, "%Y-%m-%dT%H-%M-%S")
+                        anchor_date = start_dt.date()
+                        start_date_str = start_dt.date().isoformat()
+                        end_date_str = end_dt.date().isoformat()
+                        label = f"{start_dt.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                    else:
+                        start_date = date.fromisoformat(start_raw)
+                        end_date = date.fromisoformat(end_raw)
+                        anchor_date = start_date
+                        start_date_str = start_date.isoformat()
+                        end_date_str = end_date.isoformat()
+                        label = f"{start_date_str} ~ {end_date_str}"
                 except ValueError:
                     anchor_date = None
             else:
@@ -257,6 +274,8 @@ async def trigger_compose(
     period: str = "day",
     start_date: str | None = None,
     end_date: str | None = None,
+    start_datetime: str | None = None,
+    end_datetime: str | None = None,
     video_fps: int | None = None,
     speed_multiplier: float | None = None,
     video_encoder: str | None = None,
@@ -271,10 +290,20 @@ async def trigger_compose(
     d = date.fromisoformat(target_date) if target_date else None
     range_start = date.fromisoformat(start_date) if start_date else None
     range_end = date.fromisoformat(end_date) if end_date else None
+    start_at = _parse_datetime(start_datetime)
+    end_at = _parse_datetime(end_datetime)
     if period not in {"day", "week", "month", "range"}:
         raise HTTPException(400, "period must be one of: day, week, month, range")
     if period == "range" and (range_start is None or range_end is None):
         raise HTTPException(400, "start_date and end_date are required for period=range")
+    if (start_at is None) != (end_at is None):
+        raise HTTPException(400, "start_datetime and end_datetime must be provided together")
+    if start_at is not None and end_at is not None:
+        if start_at > end_at:
+            raise HTTPException(400, "start_datetime must be earlier than end_datetime")
+        range_start = start_at.date()
+        range_end = end_at.date()
+        period = "range"
     if video_fps is not None and not 1 <= video_fps <= 240:
         raise HTTPException(400, "video_fps must be between 1 and 240")
     if speed_multiplier is not None and not 1 <= speed_multiplier <= 100000:
@@ -316,6 +345,8 @@ async def trigger_compose(
         video_quality=video_quality,
         skip_night=skip_night,
         watermark=watermark,
+        start_datetime=start_at,
+        end_datetime=end_at,
     )
     loop = asyncio.get_event_loop()
     path = await loop.run_in_executor(

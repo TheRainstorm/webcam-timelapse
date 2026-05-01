@@ -25,6 +25,8 @@ class ComposeOptions:
     video_quality: int | None = None
     skip_night: bool = False
     watermark: WatermarkConfig | None = None
+    start_datetime: datetime | None = None
+    end_datetime: datetime | None = None
 
 
 def _frame_timestamp(target_date: date, frame: Path) -> datetime:
@@ -105,6 +107,24 @@ def _collect_frames(cam: CameraConfig, target_dates: list[date]) -> list[tuple[d
     return frames
 
 
+def _filter_frames_by_datetime(
+    frames: list[tuple[date, Path]],
+    start_at: datetime | None,
+    end_at: datetime | None,
+) -> list[tuple[date, Path]]:
+    if start_at is None and end_at is None:
+        return frames
+    filtered: list[tuple[date, Path]] = []
+    for frame_date, frame in frames:
+        ts = _frame_timestamp(frame_date, frame)
+        if start_at is not None and ts < start_at:
+            continue
+        if end_at is not None and ts > end_at:
+            continue
+        filtered.append((frame_date, frame))
+    return filtered
+
+
 def _filter_daylight_frames(cam: CameraConfig, frames: list[tuple[date, Path]]) -> list[tuple[date, Path]]:
     if not frames:
         return frames
@@ -137,6 +157,10 @@ def period_video_stem(anchor_date: date, period: str, start_date: date | None = 
     if period == "range" and start_date is not None and end_date is not None:
         return f"range-{start_date.isoformat()}_{end_date.isoformat()}"
     raise ValueError(f"Unsupported compose period: {period}")
+
+
+def datetime_range_video_stem(start_at: datetime, end_at: datetime) -> str:
+    return f"range-{start_at.strftime('%Y-%m-%dT%H-%M-%S')}_{end_at.strftime('%Y-%m-%dT%H-%M-%S')}"
 
 
 def _ffmpeg_video_args(cam: CameraConfig, video_encoder: str, video_quality: int, video_fps: int) -> list[str]:
@@ -191,6 +215,7 @@ def compose_video(
     else:
         start_date, end_date = period_bounds(target_date, period)
     frames = _collect_frames(cam, _range_dates(start_date, end_date))
+    frames = _filter_frames_by_datetime(frames, options.start_datetime, options.end_datetime)
     if options.skip_night:
         frames = _filter_daylight_frames(cam, frames)
     if not frames:
@@ -205,7 +230,12 @@ def compose_video(
 
     video_dir = Path(cam.output_dir) / "videos"
     video_dir.mkdir(parents=True, exist_ok=True)
-    output = video_dir / f"{period_video_stem(target_date, period, start_date, end_date)}.mp4"
+    stem = (
+        datetime_range_video_stem(options.start_datetime, options.end_datetime)
+        if options.start_datetime is not None and options.end_datetime is not None
+        else period_video_stem(target_date, period, start_date, end_date)
+    )
+    output = video_dir / f"{stem}.mp4"
     video_fps = options.video_fps or cam.video_fps
     speed_multiplier = options.speed_multiplier or cam.interval * video_fps * cam.video_speed_factor
     video_encoder = options.video_encoder or cam.video_encoder
