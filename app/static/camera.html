@@ -28,14 +28,19 @@
             </div>
             <div class="status-list" id="cameraStatusPanel">
               <div class="status-list-item">
-                <span class="status-dot inactive" id="cameraOnlineDot"></span>
-                <span>是否在线</span>
-                <button class="btn" id="btnTestCamera" type="button" onclick="testCamera()">检测中</button>
-              </div>
-              <div class="status-list-item">
                 <span class="status-dot active paused" id="cameraActiveDot"></span>
                 <span>服务状态</span>
-                <button class="btn" id="btnToggleCamera" type="button" onclick="toggleCameraActive()">运行中</button>
+                <button class="switch-btn on" id="btnToggleCamera" type="button" onclick="toggleCameraActive()" aria-label="切换服务状态">
+                  <span class="switch-track"><span class="switch-knob"></span></span>
+                </button>
+              </div>
+              <div class="status-list-item">
+                <span class="status-dot inactive" id="cameraOnlineDot"></span>
+                <span>是否在线</span>
+                <div class="status-inline">
+                  <strong id="cameraStatusText">检测中</strong>
+                  <button class="status-icon-btn" id="btnTestCamera" type="button" onclick="testCamera()" aria-label="重新测试在线状态">↻</button>
+                </div>
               </div>
             </div>
           </div>
@@ -288,14 +293,17 @@ function cameraActiveLabel() {
 
 function updateCameraStatusUI() {
   const onlineDot = document.getElementById('cameraOnlineDot');
+  const onlineText = document.getElementById('cameraStatusText');
   const activeDot = document.getElementById('cameraActiveDot');
   const toggle = document.getElementById('btnToggleCamera');
   const testBtn = document.getElementById('btnTestCamera');
   onlineDot.classList.remove('active', 'inactive');
   onlineDot.classList.add(cameraOnline ? 'active' : 'inactive');
-  testBtn.textContent = cameraOnline ? '在线' : '离线';
+  onlineText.textContent = cameraOnline ? '在线' : '离线';
   activeDot.classList.toggle('paused', !cameraActive);
-  toggle.textContent = cameraActiveLabel();
+  toggle.classList.toggle('on', cameraActive);
+  toggle.classList.toggle('off', !cameraActive);
+  toggle.setAttribute('aria-label', `服务状态：${cameraActiveLabel()}`);
   ['btnCapture', 'btnCompose', 'btnComposeRange', 'btnComposeAll'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !cameraActive;
@@ -813,7 +821,7 @@ async function testCamera(silent = false) {
   const btn = document.getElementById('btnTestCamera');
   if (!silent) {
     btn.disabled = true;
-    btn.textContent = '检测中...';
+    btn.classList.add('spinning');
   }
   const snapshotOk = await probeImageUrl(snapshotProbeUrl || '');
   const streamOk = await probeFrameUrl(streamUrl || '');
@@ -824,9 +832,9 @@ async function testCamera(silent = false) {
     `快照 ${snapshotOk ? '通' : '断'}`,
     streamOk === null ? '实时流 未配置' : `实时流 ${streamOk ? '通' : '断'}`,
   ];
-  btn.textContent = parts.join(' / ');
+  btn.title = parts.join(' / ');
   setTimeout(() => {
-    btn.textContent = cameraOnline ? '在线' : '离线';
+    btn.classList.remove('spinning');
     btn.disabled = false;
   }, 1800);
 }
