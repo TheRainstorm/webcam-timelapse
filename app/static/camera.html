@@ -66,11 +66,11 @@
           <div class="advanced-grid">
             <label>
               <span>开始时间</span>
-              <input id="composeStartDateTime" type="text" placeholder="yyyy-mm-dd hh:mm:ss">
+              <input id="composeStartDateTime" type="text">
             </label>
             <label>
               <span>结束时间</span>
-              <input id="composeEndDateTime" type="text" placeholder="yyyy-mm-dd hh:mm:ss">
+              <input id="composeEndDateTime" type="text">
             </label>
           </div>
           <div class="preview-actions">
@@ -164,7 +164,7 @@
             </div>
           </div>
           <div class="daylight-grid" id="daylightGrid">
-            <div class="daylight-row"><span>日出日落</span><strong id="daylightStatus">未启用</strong></div>
+            <div class="daylight-row"><span>配置状态</span><strong id="daylightStatus">未配置</strong></div>
             <div class="daylight-row"><span>经纬度</span><strong id="daylightLocation">未配置</strong></div>
             <div class="daylight-row"><span>时区</span><strong id="daylightTimezone">未配置</strong></div>
             <div class="daylight-row"><span>日出日落</span><strong id="daylightTimes">选择日期后显示</strong></div>
@@ -449,7 +449,7 @@ function renderDaylightInfo() {
   const timesEl = document.getElementById('daylightTimes');
   const badgesEl = document.getElementById('daylightBadges');
   if (!daylightInfo?.configured) {
-    statusEl.textContent = '未启用';
+    statusEl.textContent = '未配置';
     locationEl.textContent = '未配置';
     nightCaptureEl.textContent = '已启用';
     nightCaptureBoxEl.classList.remove('enabled', 'warn');
@@ -460,7 +460,7 @@ function renderDaylightInfo() {
     badgesEl.innerHTML = '<span class="tag">未配置</span>';
     return;
   }
-  statusEl.textContent = daylightInfo.enabled ? '已启用' : '未启用';
+  statusEl.textContent = '已配置';
   locationEl.textContent = `${daylightInfo.latitude}, ${daylightInfo.longitude}`;
   nightCaptureEl.textContent = daylightInfo.disable_night_snapshots ? '已禁用' : '已启用';
   nightCaptureBoxEl.classList.toggle('enabled', !daylightInfo.disable_night_snapshots);
@@ -469,7 +469,6 @@ function renderDaylightInfo() {
   torchBoxEl.classList.toggle('enabled', Boolean(daylightInfo.torch_configured));
   timezoneEl.textContent = daylightInfo.timezone || '未配置';
   badgesEl.innerHTML = [
-    `<span class="tag">${daylightInfo.enabled ? '日出日落开' : '日出日落关'}</span>`,
     `<span class="tag">${daylightInfo.disable_night_snapshots ? '夜间抓拍关' : '夜间抓拍开'}</span>`,
     daylightInfo.torch_configured ? '<span class="tag">补光灯已配置</span>' : ''
   ].join('');
@@ -614,12 +613,14 @@ function syncDefaultDate() {
     selectedDate = dateKey(new Date());
   }
   calendarMonth = selectedDate.slice(0, 7);
+  ensureComposeDateTimeDefaults();
 }
 
 function selectDate(d) {
   selectedDate = d;
   snapPage = 1;
   calendarMonth = d.slice(0, 7);
+  ensureComposeDateTimeDefaults();
   renderCurrentDay();
   refreshDaylightInfo();
 }
@@ -1037,6 +1038,18 @@ function composeDateTimeValues() {
     start: document.getElementById('composeStartDateTime').value.trim(),
     end: document.getElementById('composeEndDateTime').value.trim(),
   };
+}
+
+function ensureComposeDateTimeDefaults() {
+  if (!selectedDate) return;
+  const startInput = document.getElementById('composeStartDateTime');
+  const endInput = document.getElementById('composeEndDateTime');
+  if (startInput && !startInput.value.trim()) {
+    startInput.value = `${selectedDate} 00:00:00`;
+  }
+  if (endInput && !endInput.value.trim()) {
+    endInput.value = `${selectedDate} 23:59:59`;
+  }
 }
 
 function setComposeDateTimeBoundary(type) {

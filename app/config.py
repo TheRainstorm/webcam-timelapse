@@ -24,7 +24,6 @@ class WatermarkConfig(BaseModel):
 
 
 class DaylightConfig(BaseModel):
-    enabled: bool = False
     latitude: float | None = None
     longitude: float | None = None
     timezone: str = "Asia/Shanghai"
@@ -34,7 +33,7 @@ class DaylightConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_daylight(self) -> "DaylightConfig":
-        needs_location = self.enabled or self.disable_night_snapshots or self.torch_on_url or self.torch_off_url
+        needs_location = self.disable_night_snapshots or self.torch_on_url or self.torch_off_url
         if needs_location and (self.latitude is None or self.longitude is None):
             raise ValueError("daylight.latitude and daylight.longitude are required when daylight rules are enabled")
         if (self.torch_on_url is None) != (self.torch_off_url is None):

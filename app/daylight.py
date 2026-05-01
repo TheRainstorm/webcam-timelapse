@@ -18,11 +18,7 @@ _torch_state: dict[str, bool] = {}
 
 
 def has_daylight_rules(cam: CameraConfig) -> bool:
-    return (
-        cam.daylight.enabled
-        or cam.daylight.disable_night_snapshots
-        or bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url)
-    )
+    return cam.daylight.latitude is not None and cam.daylight.longitude is not None
 
 
 def _local_now(cam: CameraConfig, now: datetime | None = None) -> datetime:

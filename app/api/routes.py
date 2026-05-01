@@ -77,7 +77,6 @@ async def list_cameras() -> list[dict[str, Any]]:
             "video_quality": cam.video_quality,
             "watermark": cam.watermark.model_dump(),
             "daylight": {
-                "enabled": cam.daylight.enabled,
                 "latitude": cam.daylight.latitude,
                 "longitude": cam.daylight.longitude,
                 "disable_night_snapshots": cam.daylight.disable_night_snapshots,
@@ -97,7 +96,6 @@ async def get_daylight(name: str, start_date: str | None = None, end_date: str |
             "camera": name,
             "configured": False,
             "dates": {},
-            "enabled": cam.daylight.enabled,
             "latitude": cam.daylight.latitude,
             "longitude": cam.daylight.longitude,
             "timezone": cam.daylight.timezone,
@@ -125,7 +123,6 @@ async def get_daylight(name: str, start_date: str | None = None, end_date: str |
         "camera": name,
         "configured": True,
         "dates": dates,
-        "enabled": cam.daylight.enabled,
         "latitude": cam.daylight.latitude,
         "longitude": cam.daylight.longitude,
         "timezone": cam.daylight.timezone,

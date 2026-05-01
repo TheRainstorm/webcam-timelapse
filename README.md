@@ -222,7 +222,6 @@ global:
   vaapi_device: /dev/dri/renderD128
   video_time: "00:05"
   daylight:
-    enabled: false
     latitude: 31.2304
     longitude: 121.4737
     timezone: Asia/Shanghai
@@ -264,6 +263,7 @@ cameras:
 - `daylight.timezone`: 日出日落计算使用的时区。
 - `daylight.torch_on_url` / `daylight.torch_off_url`: 可选，配置后会在日落后发送 `POST` 开灯、日出后发送 `POST` 关灯。
 - `daylight.disable_night_snapshots`: 可选，开启后夜间不抓拍。
+- `daylight` 是否启用由 `latitude` 和 `longitude` 是否配置决定，不需要额外的 `enabled` 字段。
 - `watermark.font`: 水印字体路径；Docker Compose 会把 `./fonts` 挂载到 `/app/fonts`。
 
 网页上还支持“合成时跳过黑夜”，这个选项只影响当前手动合成请求，不会改动配置文件里的抓拍规则。它和 `daylight.disable_night_snapshots` 是互补关系：
@@ -279,7 +279,6 @@ cameras:
     snapshot_url: "http://192.168.35.126:8080/photo.jpg"
     output_dir: "/data/balcony"
     daylight:
-      enabled: true
       torch_on_url: "http://192.168.35.126:8080/enabletorch"
       torch_off_url: "http://192.168.35.126:8080/disabletorch"
 
@@ -287,7 +286,6 @@ cameras:
     snapshot_url: "http://192.168.35.127:8080/photo.jpg"
     output_dir: "/data/garden"
     daylight:
-      enabled: true
       disable_night_snapshots: true
 ```
 

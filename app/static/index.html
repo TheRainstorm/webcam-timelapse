@@ -75,63 +75,6 @@ function renderStreamPoster(snapshotUrl) {
   return '<button class="stream-poster stream-placeholder" type="button" onclick="playStreamFromPoster()">点击播放实时预览</button>';
 }
 
-function setCardOnlineState(name, online) {
-  const card = document.querySelector(`.camera-card[data-name="${CSS.escape(name)}"]`);
-  if (!card) return;
-  const statusText = card.querySelector('[data-role="online-text"]');
-  const dot = card.querySelector('[data-role="online-dot"]');
-  card.classList.toggle('active', online);
-  card.classList.toggle('inactive', !online);
-  if (statusText) statusText.textContent = online ? '在线' : '离线';
-  if (dot) {
-    dot.classList.remove('active', 'inactive');
-    dot.classList.add(online ? 'active' : 'inactive');
-  }
-}
-
-function probeImageUrl(url, timeoutMs = 5000) {
-  return new Promise(resolve => {
-    if (!url) { resolve(false); return; }
-    const img = new Image();
-    const timer = setTimeout(() => done(false), timeoutMs);
-    function done(ok) {
-      clearTimeout(timer);
-      img.onload = null;
-      img.onerror = null;
-      resolve(ok);
-    }
-    img.onload = () => done(true);
-    img.onerror = () => done(false);
-    img.src = `${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
-  });
-}
-
-function probeFrameUrl(url, timeoutMs = 5000) {
-  return new Promise(resolve => {
-    if (!url) { resolve(null); return; }
-    const frame = document.createElement('iframe');
-    frame.style.display = 'none';
-    const timer = setTimeout(() => done(false), timeoutMs);
-    function done(ok) {
-      clearTimeout(timer);
-      frame.onload = null;
-      frame.onerror = null;
-      frame.remove();
-      resolve(ok);
-    }
-    frame.onload = () => done(true);
-    frame.onerror = () => done(false);
-    frame.src = `${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
-    document.body.appendChild(frame);
-  });
-}
-
-async function probeCamera(cam) {
-  const snapshotOk = await probeImageUrl(cam.snapshot_url);
-  const streamOk = await probeFrameUrl(cam.stream_url);
-  return snapshotOk && (streamOk !== false);
-}
-
 async function load() {
   const res = await fetch('/api/cameras');
   const cameras = await res.json();
@@ -145,7 +88,7 @@ async function load() {
       : '';
     const playBtn = cam.stream_url ? `<div class="play-btn">▶</div>` : '';
     return `
-    <div class="camera-card inactive ${cam.active ? '' : 'paused'}" data-name="${escapeAttr(cam.name)}">
+    <div class="camera-card ${cam.active ? 'active' : 'inactive paused'}" data-name="${escapeAttr(cam.name)}">
       <div class="camera-thumb" data-stream-url="${escapeAttr(cam.stream_url || '')}" data-snapshot-url="${escapeAttr(snapshotUrl)}" onclick="openStreamFromThumb(this)">
         ${thumb}
         ${playBtn}
@@ -157,10 +100,8 @@ async function load() {
           ${cam.stream_url ? '<span class="tag">实时流</span>' : ''}
         </div>
         <div class="camera-status-line">
-          <span class="status-dot inactive ${cam.active ? '' : 'paused'}" data-role="online-dot"></span>
-          <span data-role="online-text">检测中</span>
-          <span>·</span>
-          <span>服务状态 ${cam.active ? '运行中' : '已关闭'}</span>
+          <span class="status-dot ${cam.active ? 'active' : 'inactive paused'}"></span>
+          <span>${cam.active ? '运行中' : '已关闭'}</span>
         </div>
         <div class="camera-actions">
           <a href="/camera.html?name=${encodeURIComponent(cam.name)}" class="btn btn-primary">详情</a>
@@ -169,11 +110,6 @@ async function load() {
       </div>
     </div>`;
   }).join('');
-
-  await Promise.all(cameras.map(async cam => {
-    const online = await probeCamera(cam);
-    setCardOnlineState(cam.name, online);
-  }));
 }
 
 let activeStreamUrl = '';
