@@ -10,6 +10,11 @@ from pathlib import Path
 
 from PIL import Image
 
+try:
+    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
+except AttributeError:  # Pillow < 9.1
+    RESAMPLE_LANCZOS = Image.LANCZOS
+
 from app.config import CameraConfig, WatermarkConfig
 from app.daylight import frame_in_daylight
 from app.watermark import apply_watermark
@@ -40,13 +45,23 @@ def _prepare_frames(
     frames: list[tuple[date, Path]],
     watermark: WatermarkConfig | None,
     temp_dir: Path,
+    target_size: tuple[int, int],
 ) -> list[Path]:
     prepared: list[Path] = []
     for idx, (frame_date, frame) in enumerate(frames):
         out = temp_dir / f"{idx:08d}.jpg"
-        if watermark is not None and watermark.enabled:
+        with Image.open(frame) as probe:
+            frame_size = probe.size
+        needs_render = (watermark is not None and watermark.enabled) or frame_size != target_size
+        if needs_render:
             with Image.open(frame) as source:
-                img = apply_watermark(source, watermark, _frame_timestamp(frame_date, frame))
+                img = source
+                if watermark is not None and watermark.enabled:
+                    img = apply_watermark(img, watermark, _frame_timestamp(frame_date, frame))
+                if img.size != target_size:
+                    img = img.resize(target_size, RESAMPLE_LANCZOS)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
             img.save(out, "JPEG", quality=90)
         else:
             try:
@@ -246,7 +261,9 @@ def compose_video(
         with tempfile.TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
             sampled_frames = _select_frames(frames, cam.interval, video_fps, speed_multiplier)
-            _prepare_frames(sampled_frames, watermark, temp_dir)
+            with Image.open(sampled_frames[0][1]) as first_frame:
+                target_size = first_frame.size
+            _prepare_frames(sampled_frames, watermark, temp_dir, target_size)
 
             cmd = [
                 "ffmpeg", "-y",

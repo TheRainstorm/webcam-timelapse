@@ -240,6 +240,16 @@ let modalType = '';
 let modalSnapDate = '';
 let modalSnapFrames = [];
 let modalSnapIndex = -1;
+let composeResolutionCache = {};
+let composeResolutionRequestId = 0;
+let modalSnapZoom = 1;
+let modalSnapPanX = 0;
+let modalSnapPanY = 0;
+let modalSnapDragging = false;
+let modalSnapDragStartX = 0;
+let modalSnapDragStartY = 0;
+let modalSnapPanStartX = 0;
+let modalSnapPanStartY = 0;
 
 function escapeAttr(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -591,6 +601,10 @@ function snapshotTime(filename) {
   return base;
 }
 
+function snapshotImageUrl(date, file) {
+  return `/api/cameras/${encodeURIComponent(camName)}/snapshots/${encodeURIComponent(date)}/${encodeURIComponent(file)}`;
+}
+
 async function loadSnapshots() {
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/snapshots`);
   const data = await res.json();
@@ -662,7 +676,7 @@ function renderSnapshots() {
 
   grid.innerHTML = pageFrames.map(f => `
     <div class="snap-thumb" data-date="${escapeAttr(selectedDate)}" data-file="${escapeAttr(f)}" title="${escapeAttr(snapshotTime(f))}" onclick="viewSnap(this.dataset.date, this.dataset.file)">
-      <img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${selectedDate}/${encodeURIComponent(f)}" loading="lazy">
+      <img src="${snapshotImageUrl(selectedDate, f)}" loading="lazy">
       <span class="snap-time">${escapeAttr(snapshotTime(f))}</span>
     </div>`).join('');
 
@@ -849,8 +863,13 @@ function renderModalSnap() {
   const navHint = modalSnapFrames.length > 1
     ? `<div class="modal-hint">← 上一张 · 下一张 →</div>`
     : '';
+  resetModalSnapTransform();
   document.getElementById('modalContent').innerHTML =
-    `<img src="/api/cameras/${encodeURIComponent(camName)}/snapshots/${encodeURIComponent(modalSnapDate)}/${encodeURIComponent(file)}" style="max-width:80vw;max-height:75vh"><div class="modal-caption">${escapeAttr(modalSnapDate)} ${escapeAttr(snapshotTime(file))}</div>${navHint}`;
+    `<div class="snapshot-viewer" id="snapshotViewer">
+      <img id="modalSnapshotImg" src="${snapshotImageUrl(modalSnapDate, file)}" draggable="false">
+    </div>
+    <div class="modal-caption">${escapeAttr(modalSnapDate)} ${escapeAttr(snapshotTime(file))}</div>${navHint}`;
+  bindModalSnapViewer();
 }
 
 function viewSnap(date, file) {
@@ -890,8 +909,75 @@ function closeModal() {
   modalSnapDate = '';
   modalSnapFrames = [];
   modalSnapIndex = -1;
+  resetModalSnapTransform();
+  window.removeEventListener('mousemove', dragModalSnapViewer);
+  window.removeEventListener('mouseup', stopModalSnapViewerDrag);
   document.getElementById('modal').classList.remove('open');
   document.getElementById('modalContent').innerHTML = '';
+}
+
+function resetModalSnapTransform() {
+  modalSnapZoom = 1;
+  modalSnapPanX = 0;
+  modalSnapPanY = 0;
+  modalSnapDragging = false;
+}
+
+function applyModalSnapTransform() {
+  const img = document.getElementById('modalSnapshotImg');
+  if (!img) return;
+  img.style.transform = `translate(${modalSnapPanX}px, ${modalSnapPanY}px) scale(${modalSnapZoom})`;
+}
+
+function bindModalSnapViewer() {
+  const viewer = document.getElementById('snapshotViewer');
+  if (!viewer) return;
+  const canPanZoom = window.matchMedia('(pointer: fine)').matches;
+  viewer.classList.toggle('panzoom-enabled', canPanZoom);
+  applyModalSnapTransform();
+  if (!canPanZoom) return;
+
+  viewer.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = viewer.getBoundingClientRect();
+    const oldZoom = modalSnapZoom;
+    const nextZoom = Math.min(6, Math.max(0.5, oldZoom * (e.deltaY < 0 ? 1.12 : 0.88)));
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    modalSnapPanX = (modalSnapPanX - (e.clientX - centerX)) * (nextZoom / oldZoom) + (e.clientX - centerX);
+    modalSnapPanY = (modalSnapPanY - (e.clientY - centerY)) * (nextZoom / oldZoom) + (e.clientY - centerY);
+    modalSnapZoom = nextZoom;
+    applyModalSnapTransform();
+  }, { passive: false });
+
+  viewer.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    modalSnapDragging = true;
+    modalSnapDragStartX = e.clientX;
+    modalSnapDragStartY = e.clientY;
+    modalSnapPanStartX = modalSnapPanX;
+    modalSnapPanStartY = modalSnapPanY;
+    viewer.classList.add('dragging');
+  });
+
+  window.removeEventListener('mousemove', dragModalSnapViewer);
+  window.removeEventListener('mouseup', stopModalSnapViewerDrag);
+  window.addEventListener('mousemove', dragModalSnapViewer);
+  window.addEventListener('mouseup', stopModalSnapViewerDrag);
+}
+
+function dragModalSnapViewer(e) {
+  if (!modalSnapDragging) return;
+  modalSnapPanX = modalSnapPanStartX + e.clientX - modalSnapDragStartX;
+  modalSnapPanY = modalSnapPanStartY + e.clientY - modalSnapDragStartY;
+  applyModalSnapTransform();
+}
+
+function stopModalSnapViewerDrag() {
+  if (!modalSnapDragging) return;
+  modalSnapDragging = false;
+  document.getElementById('snapshotViewer')?.classList.remove('dragging');
 }
 
 async function triggerCapture() {
@@ -955,6 +1041,58 @@ function composeFrameCount(sourceCount, fps, speed) {
   return Math.max(1, Math.round(sourceCount * snapshotInterval * fps / speed));
 }
 
+function composePreviewFrames() {
+  const { start, end } = composeDateTimeValues();
+  const [minAt, maxAt] = start && end && start > end ? [end, start] : [start, end];
+  return currentComposeDates()
+    .sort()
+    .flatMap(date => (snapData[date] || [])
+      .slice()
+      .sort((a, b) => a.localeCompare(b))
+      .filter(file => {
+        if (!minAt || !maxAt) return true;
+        const at = `${date} ${snapshotTime(file)}`;
+        return minAt <= at && at <= maxAt;
+      })
+      .map(file => ({ date, file })));
+}
+
+function daytimeComposeFrameCount(frames) {
+  let count = 0;
+  frames.forEach(({ date, file }) => {
+    const window = daylightWindow(date);
+    if (!window) {
+      count += 1;
+      return;
+    }
+    const time = snapshotTime(file);
+    if (window.sunrise_time <= time && time < window.sunset_time) count += 1;
+  });
+  return count;
+}
+
+function formatResolution(resolution) {
+  if (!resolution) return '分辨率 -';
+  if (!resolution.width || !resolution.height) return '分辨率读取失败';
+  return `分辨率 ${resolution.width}×${resolution.height}`;
+}
+
+function loadComposeResolution(frame) {
+  const key = `${frame.date}/${frame.file}`;
+  if (composeResolutionCache[key]) return;
+  const requestId = ++composeResolutionRequestId;
+  const img = new Image();
+  img.onload = () => {
+    composeResolutionCache[key] = { width: img.naturalWidth, height: img.naturalHeight };
+    if (requestId === composeResolutionRequestId) updateComposeEstimate();
+  };
+  img.onerror = () => {
+    composeResolutionCache[key] = { width: 0, height: 0 };
+    if (requestId === composeResolutionRequestId) updateComposeEstimate();
+  };
+  img.src = snapshotImageUrl(frame.date, frame.file);
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(seconds));
   const h = Math.floor(total / 3600);
@@ -969,13 +1107,18 @@ function updateComposeEstimate() {
   if (!el) return;
 
   const { start, end } = composeDateTimeValues();
-  let sourceCount = (snapData[selectedDate] || []).length;
+  const previewFrames = composePreviewFrames();
+  const firstFrame = previewFrames[0] || null;
+  const firstFrameKey = firstFrame ? `${firstFrame.date}/${firstFrame.file}` : '';
+  const resolution = firstFrameKey ? composeResolutionCache[firstFrameKey] : null;
+  let resolutionLabel = formatResolution(resolution);
+  if (firstFrame && !resolution) {
+    resolutionLabel = '分辨率 读取中';
+    loadComposeResolution(firstFrame);
+  }
+  let sourceCount = previewFrames.length;
   let rangeLabel = `当天 ${selectedDate || '未选择'}`;
   if (start && end) {
-    sourceCount = 0;
-    currentComposeDates().forEach(date => {
-      sourceCount += (snapData[date] || []).length;
-    });
     rangeLabel = `时间段 ${start} ~ ${end}`;
   }
   const fps = composeFps();
@@ -984,7 +1127,7 @@ function updateComposeEstimate() {
   const encoder = document.getElementById('composeEncoder').value || 'libx264';
   const quality = composeQuality();
   const skipNight = document.getElementById('composeSkipNight').checked;
-  const countedFrames = skipNight ? daytimeSnapshotCount(currentComposeDates()) : sourceCount;
+  const countedFrames = skipNight ? daytimeComposeFrameCount(previewFrames) : sourceCount;
   const outputFrames = composeFrameCount(countedFrames, fps, speed);
   const duration = outputFrames ? outputFrames / fps : 0;
   const watermarkEnabled = document.getElementById('composeWatermark').checked;
@@ -995,6 +1138,7 @@ function updateComposeEstimate() {
     rangeLabel,
     `原始 ${sourceCount} 张`,
     skipNight ? `白天 ${countedFrames} 张` : '不过滤黑夜',
+    resolutionLabel,
     `输出 ${outputFrames} 帧`,
     `预计 ${formatDuration(duration)}`,
     `帧率 ${fps}`,
