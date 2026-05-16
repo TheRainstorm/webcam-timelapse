@@ -15,10 +15,26 @@ logger = logging.getLogger(__name__)
 
 _sun_cache: dict[tuple[str, date], tuple[datetime, datetime]] = {}
 _torch_state: dict[str, bool] = {}
+_auto_torch_enabled: dict[str, bool] = {}
 
 
 def has_daylight_rules(cam: CameraConfig) -> bool:
     return cam.daylight.latitude is not None and cam.daylight.longitude is not None
+
+
+def is_auto_torch_enabled(cam: CameraConfig) -> bool:
+    if not cam.daylight.torch_on_url or not cam.daylight.torch_off_url:
+        return False
+    return _auto_torch_enabled.get(cam.name, True)
+
+
+def set_auto_torch_enabled(cam: CameraConfig, enabled: bool) -> bool:
+    _auto_torch_enabled[cam.name] = enabled
+    return enabled
+
+
+def torch_enabled(cam: CameraConfig) -> bool | None:
+    return _torch_state.get(cam.name)
 
 
 def _local_now(cam: CameraConfig, now: datetime | None = None) -> datetime:
@@ -75,6 +91,8 @@ async def reconcile_torch(cam: CameraConfig) -> None:
     if not has_daylight_rules(cam):
         return
     if not cam.daylight.torch_on_url or not cam.daylight.torch_off_url:
+        return
+    if not is_auto_torch_enabled(cam):
         return
 
     should_on = not is_daylight(cam)

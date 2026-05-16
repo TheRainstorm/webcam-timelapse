@@ -269,6 +269,10 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   background: transparent;
   cursor: pointer;
 }
+.switch-btn:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
 .switch-track {
   width: 44px;
   height: 24px;
@@ -612,25 +616,32 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 }
 .daylight-feature-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px;
 }
 .daylight-feature {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface2);
+}
+.daylight-feature-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .daylight-feature.enabled {
   border-color: rgba(79, 156, 249, 0.45);
   background: rgba(79, 156, 249, 0.10);
 }
 .daylight-feature.warn {
-  border-color: rgba(224, 82, 82, 0.45);
-  background: rgba(224, 82, 82, 0.10);
+  border-color: var(--border);
+  background: var(--surface2);
 }
 .daylight-feature-label {
   color: var(--text);
@@ -642,11 +653,16 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
   font-size: 12px;
   font-weight: 600;
 }
+.daylight-feature-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .daylight-feature.enabled .daylight-feature-value {
   color: var(--accent);
 }
 .daylight-feature.warn .daylight-feature-value {
-  color: #f08b8b;
+  color: var(--text-muted);
 }
 .daylight-row {
   display: grid;

@@ -13,7 +13,15 @@ from app.camera_state import is_camera_active, set_camera_active
 from app.capture import capture_snapshot
 from app.composer import ComposeOptions, compose_video, period_bounds
 from app.config import CameraConfig
-from app.daylight import has_daylight_rules, is_daylight, set_torch, sun_window
+from app.daylight import (
+    has_daylight_rules,
+    is_auto_torch_enabled,
+    is_daylight,
+    set_auto_torch_enabled,
+    set_torch,
+    sun_window,
+    torch_enabled,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -81,6 +89,8 @@ async def list_cameras() -> list[dict[str, Any]]:
                 "longitude": cam.daylight.longitude,
                 "disable_night_snapshots": cam.daylight.disable_night_snapshots,
                 "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+                "torch_enabled": torch_enabled(cam),
+                "auto_torch_enabled": is_auto_torch_enabled(cam),
                 "configured": has_daylight_rules(cam),
                 "timezone": cam.daylight.timezone,
             },
@@ -101,6 +111,8 @@ async def get_daylight(name: str, start_date: str | None = None, end_date: str |
             "timezone": cam.daylight.timezone,
             "disable_night_snapshots": cam.daylight.disable_night_snapshots,
             "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+            "torch_enabled": torch_enabled(cam),
+            "auto_torch_enabled": is_auto_torch_enabled(cam),
         }
 
     start = date.fromisoformat(start_date) if start_date else date.today()
@@ -128,6 +140,8 @@ async def get_daylight(name: str, start_date: str | None = None, end_date: str |
         "timezone": cam.daylight.timezone,
         "disable_night_snapshots": cam.daylight.disable_night_snapshots,
         "torch_configured": bool(cam.daylight.torch_on_url and cam.daylight.torch_off_url),
+        "torch_enabled": torch_enabled(cam),
+        "auto_torch_enabled": is_auto_torch_enabled(cam),
     }
 
 
@@ -251,7 +265,24 @@ async def trigger_torch(name: str, action: str) -> dict[str, Any]:
         await set_torch(cam, action == "on")
     except Exception as exc:
         raise HTTPException(502, f"Torch {action} failed: {exc}") from exc
-    return {"status": "ok", "action": action}
+    return {"status": "ok", "action": action, "torch_enabled": action == "on"}
+
+
+@router.post("/cameras/{name}/daylight/auto-torch")
+async def set_daylight_auto_torch(name: str, enabled: bool) -> dict[str, Any]:
+    cam = _get_cam(name)
+    if not cam.daylight.torch_on_url or not cam.daylight.torch_off_url:
+        raise HTTPException(400, "Torch URLs are not configured")
+    return {"status": "ok", "auto_torch_enabled": set_auto_torch_enabled(cam, enabled)}
+
+
+@router.post("/cameras/{name}/daylight/night-capture")
+async def set_daylight_night_capture(name: str, enabled: bool) -> dict[str, Any]:
+    cam = _get_cam(name)
+    if enabled and not has_daylight_rules(cam):
+        raise HTTPException(400, "Daylight rules are not configured")
+    cam.daylight.disable_night_snapshots = not enabled
+    return {"status": "ok", "night_capture_enabled": enabled}
 
 
 @router.post("/cameras/{name}/status")

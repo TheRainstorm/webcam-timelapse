@@ -148,19 +148,37 @@
             <div class="daylight-badges" id="daylightBadges">
               <span class="tag">未配置</span>
             </div>
-            <div class="preview-actions" id="torchActions" style="display:none">
-              <button class="btn" id="btnTorchOn" onclick="toggleTorch('on')">开灯</button>
-              <button class="btn" id="btnTorchOff" onclick="toggleTorch('off')">关灯</button>
-            </div>
           </div>
           <div class="daylight-feature-grid">
             <div class="daylight-feature" id="daylightNightCaptureBox">
-              <span class="daylight-feature-label">夜间抓拍</span>
-              <strong class="daylight-feature-value" id="daylightNightCapture">已启用</strong>
+              <div class="daylight-feature-main">
+                <span class="daylight-feature-label">夜间抓拍</span>
+                <strong class="daylight-feature-value" id="daylightNightCapture">已启用</strong>
+                <span class="daylight-feature-note">开启时日落后也继续抓拍，关闭后夜间停止抓拍</span>
+              </div>
+              <button class="switch-btn on" id="btnNightCapture" type="button" onclick="toggleNightCapture()" aria-label="切换夜间抓拍">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </button>
             </div>
             <div class="daylight-feature" id="daylightTorchBox">
-              <span class="daylight-feature-label">补光灯</span>
-              <strong class="daylight-feature-value" id="daylightTorch">未配置</strong>
+              <div class="daylight-feature-main">
+                <span class="daylight-feature-label">自动补光灯</span>
+                <strong class="daylight-feature-value" id="daylightTorch">未配置</strong>
+                <span class="daylight-feature-note">开启后日落自动打开相机闪光灯，日出后自动关闭</span>
+              </div>
+              <button class="switch-btn" id="btnAutoTorch" type="button" onclick="toggleAutoTorch()" aria-label="切换自动补光灯">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </button>
+            </div>
+            <div class="daylight-feature" id="daylightManualTorchBox">
+              <div class="daylight-feature-main">
+                <span class="daylight-feature-label">闪光灯</span>
+                <strong class="daylight-feature-value" id="daylightManualTorch">未配置</strong>
+                <span class="daylight-feature-note">立即打开或关闭相机闪光灯</span>
+              </div>
+              <button class="switch-btn" id="btnManualTorch" type="button" onclick="toggleManualTorch()" aria-label="切换闪光灯">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </button>
             </div>
           </div>
           <div class="daylight-grid" id="daylightGrid">
@@ -453,18 +471,35 @@ function renderDaylightInfo() {
   const locationEl = document.getElementById('daylightLocation');
   const nightCaptureEl = document.getElementById('daylightNightCapture');
   const nightCaptureBoxEl = document.getElementById('daylightNightCaptureBox');
+  const nightCaptureBtn = document.getElementById('btnNightCapture');
   const torchEl = document.getElementById('daylightTorch');
   const torchBoxEl = document.getElementById('daylightTorchBox');
+  const autoTorchBtn = document.getElementById('btnAutoTorch');
+  const manualTorchEl = document.getElementById('daylightManualTorch');
+  const manualTorchBoxEl = document.getElementById('daylightManualTorchBox');
+  const manualTorchBtn = document.getElementById('btnManualTorch');
   const timezoneEl = document.getElementById('daylightTimezone');
   const timesEl = document.getElementById('daylightTimes');
   const badgesEl = document.getElementById('daylightBadges');
+  const nightCaptureEnabled = !daylightInfo?.disable_night_snapshots;
+  const autoTorchEnabled = Boolean(daylightInfo?.auto_torch_enabled);
+  const torchConfigured = Boolean(daylightInfo?.torch_configured);
+  const manualTorchEnabled = daylightInfo?.torch_enabled === true;
   if (!daylightInfo?.configured) {
     statusEl.textContent = '未配置';
     locationEl.textContent = '未配置';
-    nightCaptureEl.textContent = '已启用';
-    nightCaptureBoxEl.classList.remove('enabled', 'warn');
+    nightCaptureEl.textContent = '未配置';
+    nightCaptureBoxEl.classList.remove('enabled');
+    nightCaptureBtn.classList.remove('on');
+    nightCaptureBtn.disabled = true;
     torchEl.textContent = '未配置';
     torchBoxEl.classList.remove('enabled');
+    autoTorchBtn.classList.remove('on');
+    autoTorchBtn.disabled = true;
+    manualTorchEl.textContent = '未配置';
+    manualTorchBoxEl.classList.remove('enabled');
+    manualTorchBtn.classList.remove('on');
+    manualTorchBtn.disabled = true;
     timezoneEl.textContent = daylightInfo?.timezone || '未配置';
     timesEl.textContent = '未配置日出日落规则';
     badgesEl.innerHTML = '<span class="tag">未配置</span>';
@@ -472,16 +507,22 @@ function renderDaylightInfo() {
   }
   statusEl.textContent = '已配置';
   locationEl.textContent = `${daylightInfo.latitude}, ${daylightInfo.longitude}`;
-  nightCaptureEl.textContent = daylightInfo.disable_night_snapshots ? '已禁用' : '已启用';
-  nightCaptureBoxEl.classList.toggle('enabled', !daylightInfo.disable_night_snapshots);
-  nightCaptureBoxEl.classList.toggle('warn', Boolean(daylightInfo.disable_night_snapshots));
-  torchEl.textContent = daylightInfo.torch_configured ? '已配置' : '未配置';
-  torchBoxEl.classList.toggle('enabled', Boolean(daylightInfo.torch_configured));
+  nightCaptureEl.textContent = nightCaptureEnabled ? '开启' : '关闭';
+  nightCaptureBoxEl.classList.toggle('enabled', nightCaptureEnabled);
+  nightCaptureBtn.classList.toggle('on', nightCaptureEnabled);
+  nightCaptureBtn.disabled = false;
+  torchEl.textContent = torchConfigured ? (autoTorchEnabled ? '开启' : '关闭') : '未配置';
+  torchBoxEl.classList.toggle('enabled', torchConfigured && autoTorchEnabled);
+  autoTorchBtn.classList.toggle('on', torchConfigured && autoTorchEnabled);
+  autoTorchBtn.disabled = !torchConfigured;
+  manualTorchEl.textContent = torchConfigured
+    ? (daylightInfo.torch_enabled === null || daylightInfo.torch_enabled === undefined ? '未知' : (manualTorchEnabled ? '开启' : '关闭'))
+    : '未配置';
+  manualTorchBoxEl.classList.toggle('enabled', torchConfigured && manualTorchEnabled);
+  manualTorchBtn.classList.toggle('on', torchConfigured && manualTorchEnabled);
+  manualTorchBtn.disabled = !torchConfigured;
   timezoneEl.textContent = daylightInfo.timezone || '未配置';
-  badgesEl.innerHTML = [
-    `<span class="tag">${daylightInfo.disable_night_snapshots ? '夜间抓拍关' : '夜间抓拍开'}</span>`,
-    daylightInfo.torch_configured ? '<span class="tag">补光灯已配置</span>' : ''
-  ].join('');
+  badgesEl.innerHTML = torchConfigured ? '' : '<span class="tag">自动补光灯未配置</span>';
 
   const info = selectedDate ? daylightWindow(selectedDate) : null;
   if (!info) {
@@ -770,10 +811,8 @@ async function loadStream() {
   const res = await fetch('/api/cameras');
   const cameras = await res.json();
   const cam = cameras.find(c => c.name === camName);
-  const torchActions = document.getElementById('torchActions');
   if (!cam) return;
 
-  torchActions.style.display = 'none';
   cameraActive = cam.active !== false;
   updateCameraStatusUI();
 
@@ -796,9 +835,6 @@ async function loadStream() {
     streamUrl = cam.stream_url;
     streamSnapshotUrl = latestSnapshotUrl(cam);
     document.getElementById('streamBox').innerHTML = renderStreamPoster();
-  }
-  if (cam.daylight?.torch_configured) {
-    torchActions.style.display = 'flex';
   }
   testCamera(true);
 }
@@ -988,17 +1024,44 @@ async function triggerCapture() {
   setTimeout(() => { btn.textContent = '立即抓帧'; btn.disabled = false; loadSnapshots(); }, 1500);
 }
 
-async function toggleTorch(action) {
-  const btn = document.getElementById(action === 'on' ? 'btnTorchOn' : 'btnTorchOff');
-  const original = action === 'on' ? '开灯' : '关灯';
+async function toggleManualTorch() {
+  if (!daylightInfo?.torch_configured) return;
+  const btn = document.getElementById('btnManualTorch');
+  const nextEnabled = daylightInfo.torch_enabled !== true;
+  const action = nextEnabled ? 'on' : 'off';
   btn.disabled = true;
-  btn.textContent = action === 'on' ? '开灯中...' : '关灯中...';
   const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/torch/${action}`, { method: 'POST' });
-  btn.textContent = res.ok ? '✓ 成功' : '失败';
-  setTimeout(() => {
-    btn.textContent = original;
-    btn.disabled = false;
-  }, 1500);
+  if (res.ok) {
+    daylightInfo.torch_enabled = nextEnabled;
+  }
+  renderDaylightInfo();
+}
+
+async function toggleAutoTorch() {
+  if (!daylightInfo?.torch_configured) return;
+  const btn = document.getElementById('btnAutoTorch');
+  const nextEnabled = !daylightInfo.auto_torch_enabled;
+  btn.disabled = true;
+  const params = new URLSearchParams({ enabled: String(nextEnabled) });
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/daylight/auto-torch?${params.toString()}`, { method: 'POST' });
+  if (res.ok) {
+    daylightInfo.auto_torch_enabled = nextEnabled;
+  }
+  renderDaylightInfo();
+}
+
+async function toggleNightCapture() {
+  if (!daylightInfo?.configured) return;
+  const btn = document.getElementById('btnNightCapture');
+  const nextEnabled = Boolean(daylightInfo.disable_night_snapshots);
+  btn.disabled = true;
+  const params = new URLSearchParams({ enabled: String(nextEnabled) });
+  const res = await fetch(`/api/cameras/${encodeURIComponent(camName)}/daylight/night-capture?${params.toString()}`, { method: 'POST' });
+  if (res.ok) {
+    daylightInfo.disable_night_snapshots = !nextEnabled;
+  }
+  renderDaylightInfo();
+  updateComposeEstimate();
 }
 
 function clampNumber(value, min, max, fallback) {
