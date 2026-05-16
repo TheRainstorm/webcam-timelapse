@@ -9,6 +9,7 @@ import httpx
 from PIL import Image
 
 from app.config import CameraConfig
+from app.image_ops import rotate_image
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ async def capture_snapshot(cam: CameraConfig) -> Path | None:
         logger.warning("[%s] 抓帧失败: %s", cam.name, e)
         return None
 
+    img = rotate_image(img, cam.snapshot_rotation)
     if img.mode != "RGB":
         img = img.convert("RGB")
     img.save(save_path, "JPEG", quality=90)

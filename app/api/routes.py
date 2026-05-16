@@ -22,6 +22,7 @@ from app.daylight import (
     sun_window,
     torch_enabled,
 )
+from app.image_ops import SUPPORTED_IMAGE_ROTATIONS
 
 router = APIRouter(prefix="/api")
 
@@ -83,6 +84,7 @@ async def list_cameras() -> list[dict[str, Any]]:
             "video_speed_factor": cam.video_speed_factor,
             "video_encoder": cam.video_encoder,
             "video_quality": cam.video_quality,
+            "snapshot_rotation": cam.snapshot_rotation,
             "watermark": cam.watermark.model_dump(),
             "daylight": {
                 "latitude": cam.daylight.latitude,
@@ -308,6 +310,7 @@ async def trigger_compose(
     speed_multiplier: float | None = None,
     video_encoder: str | None = None,
     video_quality: int | None = None,
+    image_rotation: int = 0,
     skip_night: bool = False,
     watermark_enabled: bool | None = None,
     watermark_position: str | None = None,
@@ -345,6 +348,8 @@ async def trigger_compose(
         raise HTTPException(400, "video_encoder must be one of: libx264, h264_vaapi, hevc_vaapi, h264_nvenc")
     if video_quality is not None and not 0 <= video_quality <= 51:
         raise HTTPException(400, "video_quality must be between 0 and 51")
+    if image_rotation not in SUPPORTED_IMAGE_ROTATIONS:
+        raise HTTPException(400, "image_rotation must be one of: -180, -90, 0, 90, 180")
     if watermark_position is not None and watermark_position not in {
         "top-left",
         "top-right",
@@ -375,6 +380,7 @@ async def trigger_compose(
         watermark=watermark,
         start_datetime=start_at,
         end_datetime=end_at,
+        image_rotation=image_rotation,
     )
     loop = asyncio.get_event_loop()
     path = await loop.run_in_executor(

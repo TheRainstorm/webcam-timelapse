@@ -221,6 +221,7 @@ global:
   video_quality: 23
   vaapi_device: /dev/dri/renderD128
   video_time: "00:05"
+  snapshot_rotation: 0
   daylight:
     latitude: 31.2304
     longitude: 121.4737
@@ -259,6 +260,7 @@ cameras:
 - `video_quality`: 合成质量参数，范围 `0-51`，越小质量越高；默认 `23`。
 - `vaapi_device`: VAAPI 设备路径，默认 `/dev/dri/renderD128`。
 - `video_time`: 每日合成任务触发时间，格式为 `HH:MM`，默认合成前一天。
+- `snapshot_rotation`: 保存快照前旋转角度，正数为顺时针，负数为逆时针；支持 `0`、`90`、`-90`、`180`、`-180`。
 - `daylight.latitude` / `daylight.longitude`: 用于计算日出日落时间。
 - `daylight.timezone`: 日出日落计算使用的时区。
 - `daylight.torch_on_url` / `daylight.torch_off_url`: 可选，配置后会在日落后发送 `POST` 开灯、日出后发送 `POST` 关灯。

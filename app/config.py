@@ -5,6 +5,8 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, field_validator, model_validator
 
+from app.image_ops import SUPPORTED_IMAGE_ROTATIONS
+
 SUPPORTED_VIDEO_ENCODERS = {
     "libx264",
     "h264_vaapi",
@@ -55,6 +57,7 @@ class CameraConfig(BaseModel):
     video_quality: int = 23
     vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
+    snapshot_rotation: int = 0
     watermark: WatermarkConfig = WatermarkConfig()
     daylight: DaylightConfig = DaylightConfig()
 
@@ -79,6 +82,13 @@ class CameraConfig(BaseModel):
             raise ValueError("video_quality must be between 0 and 51")
         return v
 
+    @field_validator("snapshot_rotation")
+    @classmethod
+    def validate_snapshot_rotation(cls, v: int) -> int:
+        if v not in SUPPORTED_IMAGE_ROTATIONS:
+            raise ValueError("snapshot_rotation must be one of: -180, -90, 0, 90, 180")
+        return v
+
 
 class GlobalConfig(BaseModel):
     active: bool = True
@@ -90,6 +100,7 @@ class GlobalConfig(BaseModel):
     video_quality: int = 23
     vaapi_device: str = "/dev/dri/renderD128"
     video_time: str = "00:05"
+    snapshot_rotation: int = 0
     watermark: WatermarkConfig = WatermarkConfig()
     daylight: DaylightConfig = DaylightConfig()
 
@@ -105,6 +116,13 @@ class GlobalConfig(BaseModel):
     def validate_video_quality(cls, v: int) -> int:
         if not 0 <= v <= 51:
             raise ValueError("video_quality must be between 0 and 51")
+        return v
+
+    @field_validator("snapshot_rotation")
+    @classmethod
+    def validate_snapshot_rotation(cls, v: int) -> int:
+        if v not in SUPPORTED_IMAGE_ROTATIONS:
+            raise ValueError("snapshot_rotation must be one of: -180, -90, 0, 90, 180")
         return v
 
 

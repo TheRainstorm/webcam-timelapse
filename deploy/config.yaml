@@ -8,6 +8,7 @@ global:
   video_quality: 23         # 统一质量参数，越小越清晰
   vaapi_device: /dev/dri/renderD128
   video_time: "00:05"       # 每日合成触发时间
+  snapshot_rotation: 0      # 保存快照前旋转角度：0 / 90 / -90 / 180 / -180
   daylight:
     latitude: 31.2304
     longitude: 121.4737

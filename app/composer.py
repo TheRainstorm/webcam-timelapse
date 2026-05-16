@@ -10,13 +10,9 @@ from pathlib import Path
 
 from PIL import Image
 
-try:
-    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
-except AttributeError:  # Pillow < 9.1
-    RESAMPLE_LANCZOS = Image.LANCZOS
-
 from app.config import CameraConfig, WatermarkConfig
 from app.daylight import frame_in_daylight
+from app.image_ops import RESAMPLE_LANCZOS, rotate_image, validate_image_rotation
 from app.watermark import apply_watermark
 
 logger = logging.getLogger(__name__)
@@ -32,6 +28,7 @@ class ComposeOptions:
     watermark: WatermarkConfig | None = None
     start_datetime: datetime | None = None
     end_datetime: datetime | None = None
+    image_rotation: int = 0
 
 
 def _frame_timestamp(target_date: date, frame: Path) -> datetime:
@@ -46,16 +43,21 @@ def _prepare_frames(
     watermark: WatermarkConfig | None,
     temp_dir: Path,
     target_size: tuple[int, int],
+    image_rotation: int,
 ) -> list[Path]:
     prepared: list[Path] = []
     for idx, (frame_date, frame) in enumerate(frames):
         out = temp_dir / f"{idx:08d}.jpg"
         with Image.open(frame) as probe:
-            frame_size = probe.size
-        needs_render = (watermark is not None and watermark.enabled) or frame_size != target_size
+            frame_size = rotate_image(probe, image_rotation).size
+        needs_render = (
+            image_rotation != 0
+            or (watermark is not None and watermark.enabled)
+            or frame_size != target_size
+        )
         if needs_render:
             with Image.open(frame) as source:
-                img = source
+                img = rotate_image(source, image_rotation)
                 if watermark is not None and watermark.enabled:
                     img = apply_watermark(img, watermark, _frame_timestamp(frame_date, frame))
                 if img.size != target_size:
@@ -256,14 +258,15 @@ def compose_video(
     video_encoder = options.video_encoder or cam.video_encoder
     video_quality = options.video_quality if options.video_quality is not None else cam.video_quality
     watermark = options.watermark if options.watermark is not None else cam.watermark
+    image_rotation = validate_image_rotation(options.image_rotation)
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
             sampled_frames = _select_frames(frames, cam.interval, video_fps, speed_multiplier)
             with Image.open(sampled_frames[0][1]) as first_frame:
-                target_size = first_frame.size
-            _prepare_frames(sampled_frames, watermark, temp_dir, target_size)
+                target_size = rotate_image(first_frame, image_rotation).size
+            _prepare_frames(sampled_frames, watermark, temp_dir, target_size, image_rotation)
 
             cmd = [
                 "ffmpeg", "-y",

@@ -115,6 +115,16 @@
               <span>质量</span>
               <input id="composeQuality" type="number" min="0" max="51" step="1" value="23">
             </label>
+            <label>
+              <span>照片旋转</span>
+              <select id="composeRotation">
+                <option value="0">不旋转</option>
+                <option value="90">顺时针 90°</option>
+                <option value="-90">逆时针 90°</option>
+                <option value="180">180°</option>
+                <option value="-180">-180°</option>
+              </select>
+            </label>
             <label class="check-field">
               <input id="composeSkipNight" type="checkbox">
               <span>合成时跳过黑夜</span>
@@ -268,6 +278,7 @@ let modalSnapDragStartX = 0;
 let modalSnapDragStartY = 0;
 let modalSnapPanStartX = 0;
 let modalSnapPanStartY = 0;
+let modalSnapRotation = 0;
 
 function escapeAttr(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -822,6 +833,7 @@ async function loadStream() {
   document.getElementById('composeFactor').value = cam.video_speed_factor || 1.0;
   document.getElementById('composeEncoder').value = cam.video_encoder || 'libx264';
   document.getElementById('composeQuality').value = cam.video_quality ?? 23;
+  document.getElementById('composeRotation').value = '0';
   document.getElementById('composeSkipNight').checked = false;
   document.getElementById('composeWatermark').checked = cam.watermark?.enabled !== false;
   document.getElementById('composeWatermarkPosition').value = cam.watermark?.position || 'bottom-right';
@@ -899,10 +911,16 @@ function renderModalSnap() {
   const navHint = modalSnapFrames.length > 1
     ? `<div class="modal-hint">← 上一张 · 下一张 →</div>`
     : '';
-  resetModalSnapTransform();
+  resetModalSnapTransform(false);
   document.getElementById('modalContent').innerHTML =
     `<div class="snapshot-viewer" id="snapshotViewer">
       <img id="modalSnapshotImg" src="${snapshotImageUrl(modalSnapDate, file)}" draggable="false">
+    </div>
+    <div class="snapshot-rotate-actions">
+      <button class="btn" type="button" onclick="rotateModalSnap(-90)">向左旋转 90°</button>
+      <button class="btn" type="button" onclick="rotateModalSnap(90)">向右旋转 90°</button>
+      <button class="btn" type="button" onclick="setComposeBoundaryFromModalSnap('start')">设为开始</button>
+      <button class="btn" type="button" onclick="setComposeBoundaryFromModalSnap('end')">设为结束</button>
     </div>
     <div class="modal-caption">${escapeAttr(modalSnapDate)} ${escapeAttr(snapshotTime(file))}</div>${navHint}`;
   bindModalSnapViewer();
@@ -911,6 +929,7 @@ function renderModalSnap() {
 function viewSnap(date, file) {
   modalType = 'snapshot';
   modalSnapDate = date;
+  modalSnapRotation = 0;
   modalSnapFrames = currentSortedFrames(date);
   modalSnapIndex = modalSnapFrames.indexOf(file);
   if (modalSnapIndex < 0) {
@@ -945,24 +964,46 @@ function closeModal() {
   modalSnapDate = '';
   modalSnapFrames = [];
   modalSnapIndex = -1;
-  resetModalSnapTransform();
+  resetModalSnapTransform(true);
   window.removeEventListener('mousemove', dragModalSnapViewer);
   window.removeEventListener('mouseup', stopModalSnapViewerDrag);
   document.getElementById('modal').classList.remove('open');
   document.getElementById('modalContent').innerHTML = '';
 }
 
-function resetModalSnapTransform() {
+function resetModalSnapTransform(resetRotation) {
   modalSnapZoom = 1;
   modalSnapPanX = 0;
   modalSnapPanY = 0;
+  if (resetRotation) modalSnapRotation = 0;
   modalSnapDragging = false;
 }
 
 function applyModalSnapTransform() {
   const img = document.getElementById('modalSnapshotImg');
   if (!img) return;
-  img.style.transform = `translate(${modalSnapPanX}px, ${modalSnapPanY}px) scale(${modalSnapZoom})`;
+  img.style.transform = `translate(${modalSnapPanX}px, ${modalSnapPanY}px) scale(${modalSnapZoom}) rotate(${modalSnapRotation}deg)`;
+}
+
+function rotateModalSnap(delta) {
+  if (modalType !== 'snapshot') return;
+  modalSnapRotation = (modalSnapRotation + delta) % 360;
+  applyModalSnapTransform();
+}
+
+function currentModalSnapDateTime() {
+  const file = modalSnapFrames[modalSnapIndex];
+  if (!file || !modalSnapDate) return '';
+  return `${modalSnapDate} ${snapshotTime(file)}`;
+}
+
+function setComposeBoundaryFromModalSnap(type) {
+  const value = currentModalSnapDateTime();
+  if (!value) return;
+  const input = document.getElementById(type === 'start' ? 'composeStartDateTime' : 'composeEndDateTime');
+  input.value = value;
+  updateComposeEstimate();
+  refreshDaylightInfo();
 }
 
 function bindModalSnapViewer() {
@@ -1088,6 +1129,25 @@ function composeQuality() {
   return clampNumber(document.getElementById('composeQuality').value, 0, 51, 23);
 }
 
+function composeRotation() {
+  return clampImageRotation(document.getElementById('composeRotation').value);
+}
+
+function clampImageRotation(value) {
+  const rotation = Number(value);
+  return [-180, -90, 0, 90, 180].includes(rotation) ? rotation : 0;
+}
+
+function rotationLabel(rotation) {
+  return ({
+    '-180': '-180°',
+    '-90': '逆时针 90°',
+    '0': '不旋转',
+    '90': '顺时针 90°',
+    '180': '180°'
+  })[String(rotation)] || '不旋转';
+}
+
 function applyFpsPreset() {
   const preset = document.getElementById('composeFpsPreset');
   if (!preset.value) return;
@@ -1134,10 +1194,13 @@ function daytimeComposeFrameCount(frames) {
   return count;
 }
 
-function formatResolution(resolution) {
+function formatResolution(resolution, rotation = 0) {
   if (!resolution) return '分辨率 -';
   if (!resolution.width || !resolution.height) return '分辨率读取失败';
-  return `分辨率 ${resolution.width}×${resolution.height}`;
+  const swap = Math.abs(rotation) === 90;
+  const width = swap ? resolution.height : resolution.width;
+  const height = swap ? resolution.width : resolution.height;
+  return `分辨率 ${width}×${height}`;
 }
 
 function loadComposeResolution(frame) {
@@ -1174,7 +1237,8 @@ function updateComposeEstimate() {
   const firstFrame = previewFrames[0] || null;
   const firstFrameKey = firstFrame ? `${firstFrame.date}/${firstFrame.file}` : '';
   const resolution = firstFrameKey ? composeResolutionCache[firstFrameKey] : null;
-  let resolutionLabel = formatResolution(resolution);
+  const rotation = composeRotation();
+  let resolutionLabel = formatResolution(resolution, rotation);
   if (firstFrame && !resolution) {
     resolutionLabel = '分辨率 读取中';
     loadComposeResolution(firstFrame);
@@ -1210,12 +1274,13 @@ function updateComposeEstimate() {
     `快进 ${speed.toFixed(1)}x`,
     `编码 ${encoder}`,
     `质量 ${quality}（越小越清晰）`,
+    `旋转 ${rotationLabel(rotation)}`,
     watermarkEnabled ? `水印 ${position} / ${size}px` : '无水印'
   ].join(' · ');
 }
 
 function bindComposeEstimateInputs() {
-  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeSkipNight, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize, #composeStartDateTime, #composeEndDateTime')
+  document.querySelectorAll('#composeFps, #composeFactor, #composeEncoder, #composeQuality, #composeRotation, #composeSkipNight, #composeWatermark, #composeWatermarkPosition, #composeWatermarkSize, #composeStartDateTime, #composeEndDateTime')
     .forEach(el => {
       if (el.dataset.boundEstimate) return;
       el.dataset.boundEstimate = '1';
@@ -1231,6 +1296,7 @@ function composeQueryParams(targetDate) {
     speed_multiplier: String(composeSpeed()),
     video_encoder: document.getElementById('composeEncoder').value || 'libx264',
     video_quality: String(composeQuality()),
+    image_rotation: String(composeRotation()),
     skip_night: String(document.getElementById('composeSkipNight').checked),
     watermark_enabled: String(watermarkEnabled),
     watermark_position: document.getElementById('composeWatermarkPosition').value,
@@ -1338,6 +1404,12 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'ArrowRight') {
     e.preventDefault();
     stepModalSnap(1);
+  } else if (e.key === '1') {
+    e.preventDefault();
+    rotateModalSnap(-90);
+  } else if (e.key === '2') {
+    e.preventDefault();
+    rotateModalSnap(90);
   }
 });
 
