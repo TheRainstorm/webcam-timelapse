@@ -1,7 +1,7 @@
 """APScheduler 定时任务：抓帧 + 每日合成 + 清理"""
 from __future__ import annotations
 import asyncio
-from datetime import datetime
+from datetime import datetime, time, timedelta
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -16,10 +16,20 @@ from app.daylight import has_daylight_rules, is_daylight, reconcile_torch
 logger = logging.getLogger(__name__)
 
 
+def _aligned_next_run_time(interval_seconds: int, now: datetime | None = None) -> datetime:
+    """返回按本地当天 00:00 对齐的下一个抓帧时间点。"""
+    current = now or datetime.now()
+    day_start = datetime.combine(current.date(), time.min)
+    elapsed = (current - day_start).total_seconds()
+    slots = int(elapsed // interval_seconds) + 1
+    return day_start + timedelta(seconds=slots * interval_seconds)
+
+
 def build_scheduler(cameras: list[CameraConfig]) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
 
     for cam in cameras:
+        next_capture_at = _aligned_next_run_time(cam.interval)
         # 定时抓帧
         scheduler.add_job(
             _capture_job,
@@ -28,7 +38,9 @@ def build_scheduler(cameras: list[CameraConfig]) -> AsyncIOScheduler:
             args=[cam],
             id=f"capture_{cam.name}",
             max_instances=1,
+            next_run_time=next_capture_at,
         )
+        logger.info("[%s] 抓帧任务已对齐: interval=%ss, next=%s", cam.name, cam.interval, next_capture_at)
 
         # 每日视频合成
         h, m = cam.video_time.split(":")
